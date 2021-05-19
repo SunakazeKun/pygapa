@@ -1,9 +1,11 @@
 # pygapa
 **pygapa** (short for *Python Galaxy Particles*) is a Python tool for editing particle and effect data in *Super Mario Galaxy 1 & 2*. It can convert the files from *Effect.arc* into editable JSON files and dumps textures as BTI files. The extracted and edited files can then be converted back into *Super Mario Galaxy*'s format.
+It also features a work in progress user interface to aid editing particle data.
 
 # Requirements
 Before you can use this tool, make sure you have installed and prepared the following programs and software:
 - [Python 3.7.0](https://www.python.org/) or newer
+- PyQT 5
 - Tools to extract and pack RARC archives, like [szstools](http://amnoid.de/gc/)
 - Text editor, for example [Notepad++](https://notepad-plus-plus.org/downloads/)
 

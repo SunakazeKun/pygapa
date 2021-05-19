@@ -48,6 +48,14 @@ def get_f64(b, o: int) -> float:
     return struct.unpack_from(">d", b, o)[0]
 
 
+def get_magic4(buffer, offset: int = 0):
+    return buffer[offset:offset+4].decode("ascii")
+
+
+def get_magic8(buffer, offset: int = 0):
+    return buffer[offset:offset+8].decode("ascii")
+
+
 def pack_bool(val: bool) -> bytes:
     return pack_u8(1 if val else 0)
 
@@ -92,21 +100,58 @@ def pack_f64(v: float) -> bytes:
     return struct.pack(">d", v)
 
 
-# String helper functions
+def __pack_magic(val: str, size: int) -> bytes:
+    magic = val.encode("ascii")
+    real_size = len(magic)
 
-def read_sjis_string(buffer, offset: int) -> str:
-    """Decodes and returns the SJIS string at the buffer's specified offset."""
+    if real_size < size:
+        return magic + bytes(size - real_size)
+    elif real_size > size:
+        return magic[:size]
+    else:
+        return magic
+
+
+def pack_magic4(val: str) -> bytes:
+    return __pack_magic(val, 4)
+
+
+def pack_magic8(val: str) -> bytes:
+    return __pack_magic(val, 8)
+
+
+# String helper functions
+def __read_string(chset: str, buffer, offset: int = 0) -> str:
     end = offset
     while end < len(buffer) - 1 and buffer[end] != 0:
         end += 1
-    return buffer[offset:end + 1].decode("shift_jisx0213").strip("\0")
+    return buffer[offset:end + 1].decode(chset).strip("\0")
+
+
+def __pack_string(chset: str, val: str) -> bytes:
+    if not val.endswith("\0"):
+        val += "\0"
+    return val.encode(chset)
+
+
+def read_ascii_string(buffer, offset: int = 0) -> str:
+    """Decodes and returns the ASCII string at the buffer's specified offset."""
+    return __read_string("ascii", buffer, offset)
+
+
+def pack_ascii_string(val: str) -> bytes:
+    """Encodes the string using ASCII and returns the packed bytes. Null-terminates the string if necessary"""
+    return __pack_string("ascii", val)
+
+
+def read_sjis_string(buffer, offset: int) -> str:
+    """Decodes and returns the SJIS string at the buffer's specified offset."""
+    return __read_string("shift_jisx0213", buffer, offset)
 
 
 def pack_sjis_string(val: str) -> bytes:
     """Encodes the string using SJIS and returns the packed bytes. Null-terminates the string if necessary"""
-    if not val.endswith("\0"):
-        val += "\0"
-    return val.encode("shift_jisx0213")
+    return __pack_string("shift_jisx0213", val)
 
 
 # File I/O functions

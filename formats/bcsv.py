@@ -1,4 +1,4 @@
-from helper import *
+from formats.helper import *
 
 # Hash and field name helpers
 HASHED_FIELD_NAMES = dict()

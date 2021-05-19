@@ -1,316 +1,506 @@
 import argparse
-import formats.bcsv as bcsv
-import formats.jpac210 as jpac210
 import os
-from helper import *
+import sys
+from copy import deepcopy
+
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
+from PyQt5 import uic, QtGui, QtCore
+
+from formats.helper import *
+import formats.particle_data as particle_data
 
 
-class ParticleData:
-    def __init__(self):
-        self.textures = dict()
-        self.particles = dict()
-        self.effects = list()
+# General application info
+APP_NAME = "pygapa"
+APP_VERSION = "v0.2"
+APP_CREATOR = "Aurum"
+APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
-    def unpack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
-        self.textures.clear()
-        self.particles.clear()
-        self.effects.clear()
+# Setup QT application
+PROGRAM = QApplication([])
+ICON = QtGui.QIcon()
+ICON.addFile("ui/icon.png", QtCore.QSize(32, 32))
+PROGRAM.setWindowIcon(ICON)
 
-        in_json = read_json_file(json_file)
-        in_effects_json = read_json_file(effects_json_file)
 
-        unused_texture_names = list()
+class PygapaEditor(QMainWindow):
+    EDITOR_MODE_EFFECT = 0
+    EDITOR_MODE_PARTICLE = 1
+    EDITOR_MODE_TEXTURE = 2
 
-        print("Loading texture files...")
-        for texture_name in in_json["textures"]:
-            texture = jpac210.JPATexture()
-            texture.file_name = texture_name
-            texture.bti_data = read_file(os.path.join(bti_folder, f"{texture_name}.bti"))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ui = uic.loadUi("ui/main.ui", self)
+        self.setWindowTitle(APP_TITLE)
 
-            self.textures[texture_name] = texture
-            unused_texture_names.append(texture_name)
+        # Particle data holders
+        self.particle_data = particle_data.ParticleData()
+        self.particle_data_folder = None
+        self.current_effect = None
+        self.copied_effect = None
 
-        print("Loading particle files...")
-        for particle_name in in_json["particles"]:
-            particle = jpac210.JPAResource()
-            in_particle_json = read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
+        # File menu actions
+        self.actionExit.triggered.connect(lambda: PROGRAM.exit())
+        self.actionOpen.triggered.connect(self.open_particle_data)
+        self.actionSave.triggered.connect(self.save_particle_data)
+        self.actionSaveAs.triggered.connect(self.save_as_particle_data)
 
-            particle.unk4 = in_particle_json["unk4"]
-            particle.unk6 = in_particle_json["unk6"]
-            particle.texture_names = in_particle_json["textures"]
+        # Register effect editing actions
+        self.listEffects.itemSelectionChanged.connect(self.select_effect)
 
-            if "dynamicsBlock" in in_particle_json:
-                particle.dynamics_block = jpac210.JPADynamicsBlock()
-                particle.dynamics_block.unpack_json(in_particle_json["dynamicsBlock"])
-            if "fieldBlocks" in in_particle_json:
-                for field_block_json in in_particle_json["fieldBlocks"]:
-                    field_block = jpac210.JPAFieldBlock()
-                    field_block.unpack_json(field_block_json)
-                    particle.field_blocks.append(field_block)
-            if "keyBlocks" in in_particle_json:
-                for key_block_json in in_particle_json["keyBlocks"]:
-                    key_block = jpac210.JPAKeyBlock()
-                    key_block.unpack_json(key_block_json)
-                    particle.key_blocks.append(key_block)
-            if "baseShape" in in_particle_json:
-                particle.base_shape = jpac210.JPABaseShape()
-                particle.base_shape.unpack_json(in_particle_json["baseShape"])
-            if "extraShape" in in_particle_json:
-                particle.extra_shape = jpac210.JPAExtraShape()
-                particle.extra_shape.unpack_json(in_particle_json["extraShape"])
-            if "childShape" in in_particle_json:
-                particle.child_shape = jpac210.JPAChildShape()
-                particle.child_shape.unpack_json(in_particle_json["childShape"])
-            if "exTexShape" in in_particle_json:
-                particle.ex_tex_shape = jpac210.JPAExTexShape()
-                particle.ex_tex_shape.unpack_json(in_particle_json["exTexShape"])
+        self.actionToolAdd.triggered.connect(self.add_effect)
+        self.actionToolDelete.triggered.connect(self.delete_effects)
+        self.actionToolClone.triggered.connect(self.clone_effects)
+        self.actionToolCopy.triggered.connect(self.copy_effect)
+        self.actionToolReplace.triggered.connect(self.replace_effect)
+        self.actionToolExport.triggered.connect(self.export_effects)
+        self.actionToolImport.triggered.connect(self.import_effects)
 
-            for texture_name in particle.texture_names:
-                if texture_name in unused_texture_names:
-                    unused_texture_names.remove(texture_name)
+        self.textEffectGroupName.textEdited.connect(self.set_effect_group_name)
+        self.textEffectUniqueName.textEdited.connect(self.set_effect_unique_name)
+        self.textEffectParentName.textEdited.connect(self.set_effect_parent_name)
+        self.textEffectEffectName.textChanged.connect(self.set_effect_effect_name)
+        self.textEffectJointName.textEdited.connect(self.set_effect_joint_name)
+        self.textEffectAnimName.textChanged.connect(self.set_effect_anim_name)
+        self.checkEffectContinueAnimEnd.stateChanged.connect(lambda s: self.set_effect_continue_anim_end(s == 2))
+        self.spinnerEffectStartFrame.valueChanged.connect(self.set_effect_start_frame)
+        self.spinnerEffectEndFrame.valueChanged.connect(self.set_effect_end_frame)
+        self.spinnerEffectOffsetX.valueChanged.connect(self.set_effect_offset_x)
+        self.spinnerEffectOffsetY.valueChanged.connect(self.set_effect_offset_y)
+        self.spinnerEffectOffsetZ.valueChanged.connect(self.set_effect_offset_z)
+        self.checkEffectAffectT.stateChanged.connect(lambda s: self.set_effect_affect_flag(s == 2, "T"))
+        self.checkEffectAffectR.stateChanged.connect(lambda s: self.set_effect_affect_flag(s == 2, "R"))
+        self.checkEffectAffectS.stateChanged.connect(lambda s: self.set_effect_affect_flag(s == 2, "S"))
+        self.checkEffectFollowT.stateChanged.connect(lambda s: self.set_effect_follow_flag(s == 2, "T"))
+        self.checkEffectFollowR.stateChanged.connect(lambda s: self.set_effect_follow_flag(s == 2, "R"))
+        self.checkEffectFollowS.stateChanged.connect(lambda s: self.set_effect_follow_flag(s == 2, "S"))
+        self.spinnerEffectScaleValue.valueChanged.connect(self.set_effect_scale_value)
+        self.spinnerEffectRateValue.valueChanged.connect(self.set_effect_rate_value)
+        self.spinnerEffectLightAffectValue.valueChanged.connect(self.set_effect_light_affect_value)
+        self.textEffectPrmColor.textEdited.connect(self.set_effect_prm_color)
+        self.textEffectEnvColor.textEdited.connect(self.set_effect_env_color)
+        self.comboEffectDrawOrder.currentIndexChanged.connect(self.set_effect_draw_order)
 
-            self.particles[particle_name] = particle
+        # Register particle editing actions
+        # nothing here yet lol
 
-        if len(unused_texture_names) > 0:
-            print("Unused textures found:", unused_texture_names)
+        # Register effect editing actions
+        self.actionToolExport.triggered.connect(self.export_textures)
 
-        print("Loading effects data...")
+        # Finalize UI and show it to user
+        self.enable_all_components(False)
+        self.show()
 
-        def add_if_missing(ine: dict, oute: dict, key: str, defval):
-            val = ine[key] if key in ine else defval
-            oute[key] = val
+    @staticmethod
+    def text_block_to_list(text):
+        return text.replace(" ", "").replace("\r", "").split("\n")
 
-        def add_if_false(ine: dict, oute: dict, key: str, trueval):
-            val = ""
-            if key in ine and ine[key] is True:
-                val = trueval
-            oute[key] = val
+    # ---------------------------------------------------------------------------------------------
+    # Particle data I/O
+    # ---------------------------------------------------------------------------------------------
+    def open_particle_data(self):
+        particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
 
-        index = 0
-        for effect_entry in in_effects_json:
-            effect = dict()
-            effect["No"] = index
-            effect["GroupName"] = effect_entry["GroupName"]
-            add_if_missing(effect_entry, effect, "AnimName", "")
-            add_if_false(effect_entry, effect, "ContinueAnimEnd", "on")
-            effect["UniqueName"] = effect_entry["UniqueName"]
-            effect["EffectName"] = " ".join(effect_entry["EffectName"])
-            add_if_missing(effect_entry, effect, "ParentName", "")
-            add_if_missing(effect_entry, effect, "JointName", "")
-            add_if_missing(effect_entry, effect, "OffsetX", 0.0)
-            add_if_missing(effect_entry, effect, "OffsetY", 0.0)
-            add_if_missing(effect_entry, effect, "OffsetZ", 0.0)
-            add_if_missing(effect_entry, effect, "StartFrame", 0)
-            add_if_missing(effect_entry, effect, "EndFrame", -1)
-            add_if_missing(effect_entry, effect, "Affect", "")
-            add_if_missing(effect_entry, effect, "Follow", "")
-            add_if_missing(effect_entry, effect, "ScaleValue", 1.0)
-            add_if_missing(effect_entry, effect, "RateValue", 1.0)
-            add_if_missing(effect_entry, effect, "PrmColor", "")
-            add_if_missing(effect_entry, effect, "EnvColor", "")
-            add_if_missing(effect_entry, effect, "LightAffectValue", 0.0)
-            add_if_missing(effect_entry, effect, "DrawOrder", "")
+        if len(particle_folder_name) == 0:
+            return
 
-            self.effects.append(effect)
-            index += 1
+        self.reset_editor()
+        self.particle_data_folder = particle_folder_name
 
-    def unpack_bin(self, jpc_file: str, names_file: str, effects_file: str):
-        # Load JPAResource and JPATexture entries
-        print("Load JPC file ...")
-        particle_container = jpac210.JParticlesContainer()
-        particle_container.unpack(read_file(jpc_file))
-        self.textures = particle_container.textures
-        self.particles.clear()
+        # Get input file paths
+        fp_particles = os.path.join(self.particle_data_folder, "Particles.jpc")
+        fp_particle_names = os.path.join(self.particle_data_folder, "ParticleNames.bcsv")
+        fp_effects = os.path.join(self.particle_data_folder, "AutoEffectList.bcsv")
 
-        # Load ParticleNames entries
-        print("Load names BCSV ...")
-        particle_names = bcsv.Bcsv()
-        particle_names.unpack(read_file(names_file))
-        particle_names = particle_names.entries
+        # Try to unpack particle data
+        try:
+            self.particle_data.unpack_bin(fp_particles, fp_particle_names, fp_effects)
+        except Exception:  # Will be handled better in the future, smh
+            self.status("An error occured while loading particle data.", True)
+            return
 
-        # Load AutoEffectList entries
-        print("Load effects BCSV ...")
-        auto_effects = bcsv.Bcsv()
-        auto_effects.unpack(read_file(effects_file))
-        self.effects = auto_effects.entries
+        # Populate data
+        for effect in self.particle_data.effects:
+            self.listEffects.addItem(effect.description())
 
-        # Populate JPAResource entries using their order from ParticleNames
-        print("Populate and sort particles  ...")
-        for particle_name_entry in particle_names:
-            particle_name = particle_name_entry["name"]
-            particle_index = particle_name_entry["id"]
+        for particle in self.particle_data.particles.keys():
+            self.listParticles.addItem(particle)
 
-            self.particles[particle_name] = particle_container.particles[particle_index]
+        for texture in self.particle_data.textures.keys():
+            self.listTextures.addItem(texture)
 
-    def pack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
-        # Create JSON data that declares which particles and textures belong to this container
-        out_json = {
-            "particles": list(),
-            "textures": list()
-        }
+        self.enable_all_components(True)
+        self.widgetEffects.setEnabled(False)
 
-        # Create folders if necessary
-        os.makedirs(os.path.dirname(json_file), exist_ok=True)
-        os.makedirs(particles_folder, exist_ok=True)
-        os.makedirs(bti_folder, exist_ok=True)
-        os.makedirs(os.path.dirname(effects_json_file), exist_ok=True)
+        self.status(f"Successfully loaded particle data from \"{self.particle_data_folder}\"")
 
-        # Collect particles and write individual JSONs
-        print("Dump particles ...")
-        for jpa_name, jpa in self.particles.items():
-            out_json["particles"].append(jpa_name)
+    def save_particle_data(self):
+        if self.particle_data_folder is None:
+            particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
+            if len(particle_folder_name) == 0:
+                return
 
-            out_particle_json = {
-                "unk4": jpa.unk4,
-                "unk6": jpa.unk6
-            }
+            self.particle_data_folder = particle_folder_name
+        self.save_particle_data_to_folder()
 
-            # Pack blocks
-            if jpa.dynamics_block:
-                out_particle_json["dynamicsBlock"] = jpa.dynamics_block.pack_json()
-            if len(jpa.field_blocks) > 0:
-                out_particle_json["fieldBlocks"] = list()
+    def save_as_particle_data(self):
+        particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
+        if len(particle_folder_name) == 0:
+            return
 
-                for field_block in jpa.field_blocks:
-                    out_particle_json["fieldBlocks"].append(field_block.pack_json())
-            if len(jpa.key_blocks) > 0:
-                out_particle_json["keyBlocks"] = list()
+        self.particle_data_folder = particle_folder_name
+        self.save_particle_data_to_folder()
 
-                for key_block in jpa.key_blocks:
-                    out_particle_json["keyBlocks"].append(key_block.pack_json())
-            if jpa.base_shape:
-                out_particle_json["baseShape"] = jpa.base_shape.pack_json()
-            if jpa.extra_shape:
-                out_particle_json["extraShape"] = jpa.extra_shape.pack_json()
-            if jpa.child_shape:
-                out_particle_json["childShape"] = jpa.child_shape.pack_json()
-            if jpa.ex_tex_shape:
-                out_particle_json["exTexShape"] = jpa.ex_tex_shape.pack_json()
+    def save_particle_data_to_folder(self):
+        # Get output file paths
+        fp_out_particles = os.path.join(self.particle_data_folder, "Particles.jpc")
+        fp_out_particle_names = os.path.join(self.particle_data_folder, "ParticleNames.bcsv")
+        fp_out_effects = os.path.join(self.particle_data_folder, "AutoEffectList.bcsv")
 
-            # Pack texture names
-            out_particle_json["textures"] = jpa.texture_names
+        # Output packed data to JPC and BCSV files
+        self.particle_data.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
 
-            write_json_file(os.path.join(particles_folder, f"{jpa_name}.json"), out_particle_json)
+        self.status(f"Saved particle data to \"{self.particle_data_folder}\"")
 
-        # Collect texture names and write texture BTIs
-        print("Dump textures ...")
-        for jpatex_name, jpatex in self.textures.items():
-            out_json["textures"].append(jpatex_name)
+    # ---------------------------------------------------------------------------------------------
+    # General UI helpers
+    # ---------------------------------------------------------------------------------------------
+    def status(self, text: str, fail: bool = False, duration: int = 5000):
+        color = "red" if fail else "green"
+        self.statusBar.setStyleSheet(f"QStatusBar{{padding:8px;color:{color};}}")
+        self.statusBar.showMessage(text, duration)
 
-            write_file(os.path.join(bti_folder, f"{jpatex_name}.bti"), jpatex.bti_data)
+    def get_editor_mode(self):
+        return self.tabContents.currentIndex()
 
-        # Write lists of particles and textures
-        write_json_file(json_file, out_json)
+    def enable_all_components(self, state: bool):
+        self.toolBar.setEnabled(state)
+        self.tabEffects.setEnabled(state)
+        self.tabParticles.setEnabled(state)
+        self.tabTextures.setEnabled(state)
 
-        # Pack AutoEffectList entries
-        out_effects_json = list()
+    def reset_editor(self):
+        self.listEffects.clear()
+        self.listParticles.clear()
+        self.listTextures.clear()
+        self.enable_all_components(False)
 
-        # Drop fields that contain default values
-        def add_non_default(ine: dict, oute: dict, key: str, defval):
-            val = ine[key]
-            if val != defval:
-                oute[key] = val
+    # ---------------------------------------------------------------------------------------------
+    # Effect editing
+    # ---------------------------------------------------------------------------------------------
+    def select_effect(self):
+        # Make sure only one effect is selected
+        if len(self.listEffects.selectedItems()) != 1:
+            self.widgetEffects.setEnabled(False)
+            self.current_effect = None
+            return
 
-        def add_if_true(ine: dict, oute: dict, key: str, trueval: str):
-            if ine[key] == trueval:
-                oute[key] = True
+        # Enable all effect editing components and get currently selected effect instance
+        self.widgetEffects.setEnabled(True)
+        self.current_effect = self.particle_data.effects[self.listEffects.currentRow()]
 
-        print("Dump effects ...")
-        for effect in self.effects:
-            effect_entry = dict()
+        # Block signals temporarily to prevent invoking textChanged
+        self.textEffectAnimName.blockSignals(True)
+        self.textEffectEffectName.blockSignals(True)
 
-            effect_entry["GroupName"] = effect["GroupName"]
-            add_non_default(effect, effect_entry, "AnimName", "")
-            add_if_true(effect, effect_entry, "ContinueAnimEnd", "on")
-            effect_entry["UniqueName"] = effect["UniqueName"]
+        # Populate effect data for currently selected item
+        self.textEffectGroupName.setText(self.current_effect.group_name)
+        self.textEffectAnimName.setPlainText("\n".join(self.current_effect.anim_name))
+        self.checkEffectContinueAnimEnd.setChecked(self.current_effect.continue_anim_end)
+        self.textEffectUniqueName.setText(self.current_effect.unique_name)
+        self.textEffectEffectName.setPlainText("\n".join(self.current_effect.effect_name))
+        self.textEffectParentName.setText(self.current_effect.parent_name)
+        self.textEffectJointName.setText(self.current_effect.joint_name)
+        self.spinnerEffectOffsetX.setValue(self.current_effect.offset_x)
+        self.spinnerEffectOffsetY.setValue(self.current_effect.offset_y)
+        self.spinnerEffectOffsetZ.setValue(self.current_effect.offset_z)
+        self.spinnerEffectStartFrame.setValue(self.current_effect.start_frame)
+        self.spinnerEffectEndFrame.setValue(self.current_effect.end_frame)
+        self.checkEffectAffectT.setChecked(self.current_effect.affect["T"])
+        self.checkEffectAffectR.setChecked(self.current_effect.affect["R"])
+        self.checkEffectAffectS.setChecked(self.current_effect.affect["S"])
+        self.checkEffectFollowT.setChecked(self.current_effect.follow["T"])
+        self.checkEffectFollowR.setChecked(self.current_effect.follow["R"])
+        self.checkEffectFollowS.setChecked(self.current_effect.follow["S"])
+        self.spinnerEffectScaleValue.setValue(self.current_effect.scale_value)
+        self.spinnerEffectRateValue.setValue(self.current_effect.rate_value)
+        self.spinnerEffectLightAffectValue.setValue(self.current_effect.light_affect_value)
+        self.textEffectPrmColor.setText(self.current_effect.prm_color)
+        self.textEffectEnvColor.setText(self.current_effect.env_color)
+        self.comboEffectDrawOrder.setCurrentIndex(particle_data.DRAW_ORDERS.index(self.current_effect.draw_order))
 
-            # EffectName is a list of effect names
-            effect_names = effect["EffectName"].split(" ")
-            if len(effect_names) == 1 and effect_names[0] == "":
-                effect_names = list()
+        # Release blocked signals
+        self.textEffectAnimName.blockSignals(False)
+        self.textEffectEffectName.blockSignals(False)
 
-            effect_entry["EffectName"] = effect_names
+    def add_effect(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
 
-            add_non_default(effect, effect_entry, "ParentName", "")
-            add_non_default(effect, effect_entry, "JointName", "")
-            add_non_default(effect, effect_entry, "OffsetX", 0.0)
-            add_non_default(effect, effect_entry, "OffsetY", 0.0)
-            add_non_default(effect, effect_entry, "OffsetZ", 0.0)
-            add_non_default(effect, effect_entry, "StartFrame", 0)
-            add_non_default(effect, effect_entry, "EndFrame", -1)
-            add_non_default(effect, effect_entry, "Affect", "")
-            add_non_default(effect, effect_entry, "Follow", "")
-            add_non_default(effect, effect_entry, "ScaleValue", 1.0)
-            add_non_default(effect, effect_entry, "RateValue", 1.0)
-            add_non_default(effect, effect_entry, "PrmColor", "")
-            add_non_default(effect, effect_entry, "EnvColor", "")
-            add_non_default(effect, effect_entry, "LightAffectValue", 0.0)
-            add_non_default(effect, effect_entry, "DrawOrder", "")
+        # Create new effect
+        effect = particle_data.ParticleEffect()
+        self.particle_data.effects.append(effect)
 
-            out_effects_json.append(effect_entry)
+        # Update effects list
+        new_index = self.listEffects.count()
+        self.listEffects.addItem(effect.description())
+        self.listEffects.clearSelection()
+        self.listEffects.setCurrentRow(new_index)
 
-        # Write AutoEffectList entries
-        write_json_file(effects_json_file, out_effects_json)
+        self.status("Added new effect entry.")
 
-    def pack_bin(self, jpc_file: str, names_file: str, effects_file: str):
-        particle_container = jpac210.JParticlesContainer()
-        particle_container.textures = self.textures
+    def delete_effects(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
 
-        # Create folders if necessary
-        os.makedirs(os.path.dirname(jpc_file), exist_ok=True)
-        os.makedirs(os.path.dirname(names_file), exist_ok=True)
-        os.makedirs(os.path.dirname(effects_file), exist_ok=True)
+        # Get selected list indexes
+        delete_indexes = [i.row() for i in self.listEffects.selectionModel().selectedIndexes()]
 
-        # Pack particles and names
-        particle_names = bcsv.Bcsv()
-        particle_names.new_field("name", bcsv.FIELD_TYPE_STRING)
-        particle_names.new_field("id", bcsv.FIELD_TYPE_S32)
+        # The selected indexes are shuffled, so we remove entries starting from the end of the list
+        delete_indexes.sort(reverse=True)
 
-        # Names have to be alphabetically sorted as the game performs binary search
-        index = 0
-        for particle_name in sorted(self.particles.keys()):
-            particle_names.entries.append({"name": particle_name, "id": index})
+        # Go through indexes and delete list item and the actual effect entry
+        for delete_index in delete_indexes:
+            self.listEffects.takeItem(delete_index)
+            self.particle_data.effects.pop(delete_index)
 
-            particle = self.particles[particle_name]
-            particle_container.particles.append(particle)
-            particle.index = index
+        self.status(f"Deleted {len(delete_indexes)} effect(s).")
 
-            index += 1
+    def clone_effects(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
 
-        # Pack effects
-        effects_data = bcsv.Bcsv()
-        effects_data.new_field("No", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("GroupName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("AnimName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ContinueAnimEnd", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("UniqueName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("EffectName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ParentName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("JointName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("OffsetX", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("OffsetY", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("OffsetZ", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("StartFrame", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("EndFrame", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("Affect", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("Follow", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ScaleValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("RateValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("PrmColor", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("EnvColor", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("LightAffectValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("DrawOrder", bcsv.FIELD_TYPE_STRING)
-        effects_data.entries = self.effects
+        # Get selected list indexes
+        clone_indexes = [i.row() for i in self.listEffects.selectionModel().selectedIndexes()]
 
-        # Write all the files
-        print("Write JPC file...")
-        write_file(jpc_file, particle_container.pack())
+        # The selected indexes are shuffled, but we want to retain the original order of the clones
+        clone_indexes.sort()
 
-        print("Write names BCSV...")
-        write_file(names_file, particle_names.pack())
+        # Make sure the first clone is selected afterwards
+        new_index = self.listEffects.count()
 
-        print("Write effects BCSV...")
-        write_file(effects_file, effects_data.pack("GroupName"))
+        # Create deep clones of all effects and populate them to the respective lists
+        for clone_index in clone_indexes:
+            clone = deepcopy(self.particle_data.effects[clone_index])
+            self.particle_data.effects.append(clone)
+            self.listEffects.addItem(clone.description())
+
+        # Update list selection
+        self.listEffects.clearSelection()
+        self.listEffects.setCurrentRow(new_index)
+
+        self.status(f"Cloned {len(clone_indexes)} effect(s).")
+
+    def copy_effect(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
+        if self.current_effect is None:
+            self.status("No effect selected!", True)
+            return
+
+        self.copied_effect = deepcopy(self.particle_data.effects[self.listEffects.currentRow()])
+
+        self.status(f"Copied effect {self.copied_effect.description()}")
+
+    def replace_effect(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
+        if self.current_effect is None:
+            self.status("No effect selected!", True)
+            return
+        if self.copied_effect is None:
+            self.status("No effect copy available!", True)
+            return
+
+        # Copy into current effect, we want to retain references to the effect entry
+        old_description = self.current_effect.description()
+
+        self.current_effect.anim_name.clear()
+        self.current_effect.effect_name.clear()
+
+        self.current_effect.group_name = self.copied_effect.group_name
+        self.current_effect.anim_name += self.copied_effect.anim_name
+        self.current_effect.continue_anim_end = self.copied_effect.continue_anim_end
+        self.current_effect.unique_name = self.copied_effect.unique_name
+        self.current_effect.effect_name += self.copied_effect.effect_name
+        self.current_effect.parent_name = self.copied_effect.parent_name
+        self.current_effect.joint_name = self.copied_effect.joint_name
+        self.current_effect.offset_x = self.copied_effect.offset_x
+        self.current_effect.offset_y = self.copied_effect.offset_y
+        self.current_effect.offset_z = self.copied_effect.offset_z
+        self.current_effect.start_frame = self.copied_effect.start_frame
+        self.current_effect.end_frame = self.copied_effect.end_frame
+        self.current_effect.scale_value = self.copied_effect.scale_value
+        self.current_effect.rate_value = self.copied_effect.rate_value
+        self.current_effect.prm_color = self.copied_effect.prm_color
+        self.current_effect.env_color = self.copied_effect.env_color
+        self.current_effect.light_affect_value = self.copied_effect.light_affect_value
+        self.current_effect.draw_order = self.copied_effect.draw_order
+
+        def copy_TRS(src: dict, dest: dict):
+            for flag in particle_data.MATRIX_FLAGS:
+                dest[flag] = src[flag]
+
+        copy_TRS(self.copied_effect.affect, self.current_effect.affect)
+        copy_TRS(self.copied_effect.follow, self.current_effect.follow)
+
+        # Update widgets and list
+        self.select_effect()
+        self.update_current_effect_description()
+
+        self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}")
+
+    def export_effects(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
+        if len(self.listEffects.selectedItems()) == 0:
+            self.status("No effect(s) selected!", True)
+            return
+
+        # Get file to export data to
+        export_file = QFileDialog.getSaveFileName(self, "Export to JSON file...", filter="JSON file (*.json)")[0]
+
+        if len(export_file) == 0:
+            return
+
+        # Get selected list indexes
+        export_indexes = [i.row() for i in self.listEffects.selectionModel().selectedIndexes()]
+        export_indexes.sort()
+
+        # Get effects to be exported as a list of JSON objects
+        exported_effects = list()
+
+        for export_index in export_indexes:
+            exported_effects.append(self.particle_data.effects[export_index].pack_json())
+
+        # Write JSON file
+        write_json_file(export_file, exported_effects)
+
+        self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".")
+
+    def import_effects(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
+
+        import_file = QFileDialog.getOpenFileName(self, "Import from JSON file...", filter="JSON file (*.json)")[0]
+
+        if len(import_file) == 0:
+            return
+
+        try:
+            imported_effects = read_json_file(import_file)
+        except Exception:
+            self.status(f"An error occured when importing from \"{import_file}\"", True)
+            return
+
+        # Select the first imported entry
+        new_index = self.listEffects.count()
+
+        # Convert JSON entries to effects and add them to the respective lists
+        for effect_entry in imported_effects:
+            effect = particle_data.ParticleEffect()
+            effect.unpack_json(effect_entry)
+
+            self.particle_data.effects.append(effect)
+            self.listEffects.addItem(effect.description())
+
+        # Update effects list
+        self.listEffects.clearSelection()
+        self.listEffects.setCurrentRow(new_index)
+
+        self.status(f"Imported {len(imported_effects)} effect(s) from \"{import_file}\"")
+
+    def update_current_effect_description(self):
+        self.listEffects.selectedItems()[0].setText(self.current_effect.description())
+
+    def set_effect_group_name(self, text: str):
+        self.current_effect.group_name = text
+        self.update_current_effect_description()
+
+    def set_effect_unique_name(self, text: str):
+        self.current_effect.unique_name = text
+        self.update_current_effect_description()
+
+    def set_effect_effect_name(self):
+        self.current_effect.effect_name = self.text_block_to_list(self.textEffectEffectName.toPlainText())
+
+    def set_effect_parent_name(self, text: str):
+        self.current_effect.parent_name = text
+
+    def set_effect_joint_name(self, text: str):
+        self.current_effect.joint_name = text
+
+    def set_effect_anim_name(self):
+        self.current_effect.anim_name = self.text_block_to_list(self.textEffectAnimName.toPlainText())
+
+    def set_effect_continue_anim_end(self, checked: bool):
+        self.current_effect.continue_anim_end = checked
+
+    def set_effect_start_frame(self, val: int):
+        self.current_effect.start_frame = val
+
+    def set_effect_end_frame(self, val: int):
+        self.current_effect.end_frame = val
+
+    def set_effect_offset_x(self, val: float):
+        self.current_effect.offset_x = round(val, 7)
+
+    def set_effect_offset_y(self, val: float):
+        self.current_effect.offset_y = round(val, 7)
+
+    def set_effect_offset_z(self, val: float):
+        self.current_effect.offset_z = round(val, 7)
+
+    def set_effect_affect_flag(self, checked: bool, flag: str):
+        self.current_effect.affect[flag] = checked
+
+    def set_effect_follow_flag(self, checked: bool, flag: str):
+        self.current_effect.follow[flag] = checked
+
+    def set_effect_scale_value(self, val: float):
+        self.current_effect.scale_value = round(val, 7)
+
+    def set_effect_rate_value(self, val: float):
+        self.current_effect.rate_value = round(val, 7)
+
+    def set_effect_light_affect_value(self, val: float):
+        self.current_effect.light_affect_value = round(val, 7)
+
+    def set_effect_prm_color(self, text: str):
+        self.current_effect.prm_color = text
+
+    def set_effect_env_color(self, text: str):
+        self.current_effect.env_color = text
+
+    def set_effect_draw_order(self, index: int):
+        self.current_effect.draw_order = particle_data.DRAW_ORDERS[index]
+
+    # ---------------------------------------------------------------------------------------------
+    # Particle editing
+    # ---------------------------------------------------------------------------------------------
+    # ~Placeholder section~
+
+    # ---------------------------------------------------------------------------------------------
+    # Texture editing
+    # ---------------------------------------------------------------------------------------------
+    def export_textures(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+            return
+        if len(self.listTextures.selectedItems()) == 0:
+            self.status("No texture(s) selected!", True)
+            return
+
+        export_folder = QFileDialog.getExistingDirectory(self, "Export textures to...")
+        if len(export_folder) == 0:
+            return
+
+        texture_names = [t.text() for t in self.listTextures.selectedItems()]
+
+        for texture_name in texture_names:
+            fp_out_texture = os.path.join(export_folder, f"{texture_name}.bti")
+            write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
+
+        self.status(f"Exported {len(texture_names)} effect(s) to \"{export_folder}\".")
 
 
 def dump_particle_data(in_folder: str, out_folder: str):
@@ -344,7 +534,7 @@ def dump_particle_data(in_folder: str, out_folder: str):
     fp_out_effects_json = os.path.join(out_folder, "Effects.json")
 
     # Unpack data from JPC and BCSV files
-    pd = ParticleData()
+    pd = particle_data.ParticleData()
     pd.unpack_bin(fp_particles, fp_particle_names, fp_effects)
 
     # Dump data to JSON and BTI files
@@ -378,20 +568,27 @@ def pack_particle_data(in_folder: str, out_folder: str):
     fp_out_effects = os.path.join(out_folder, "AutoEffectList.bcsv")
 
     # Load data from JSON and BTI files
-    pd = ParticleData()
+    pd = particle_data.ParticleData()
     pd.unpack_json(fp_particles_json, fp_particles, fp_textures, fp_effects_json)
 
     # Pack data to JPC and BCSV files
     pd.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
 
 
-parser = argparse.ArgumentParser(description="pygapa")
-parser.add_argument("mode", type=str)
-parser.add_argument("in_dir", type=str)
-parser.add_argument("out_dir", type=str)
-args = parser.parse_args()
+if __name__ == "__main__":
+    # Batch mode
+    if len(sys.argv) > 1:
+        parser = argparse.ArgumentParser(description="pygapa")
+        parser.add_argument("mode", type=str)
+        parser.add_argument("in_dir", type=str)
+        parser.add_argument("out_dir", type=str)
+        args = parser.parse_args()
 
-if args.mode == "dump":
-    dump_particle_data(args.in_dir, args.out_dir)
-elif args.mode == "pack":
-    pack_particle_data(args.in_dir, args.out_dir)
+        if args.mode == "dump":
+            dump_particle_data(args.in_dir, args.out_dir)
+        elif args.mode == "pack":
+            pack_particle_data(args.in_dir, args.out_dir)
+    # Editor mode
+    else:
+        main_window = PygapaEditor()
+        sys.exit(PROGRAM.exec_())

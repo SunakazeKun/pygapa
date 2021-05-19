@@ -1,4 +1,4 @@
-from helper import *
+from formats.helper import *
 
 
 class JPATexture:
@@ -344,8 +344,7 @@ class JParticlesContainer:
         self.textures.clear()
 
         # Parse header
-        magic = buffer[offset:offset + 0x8].decode("ascii")
-        if magic != "JPAC2-10":
+        if get_magic8(buffer, offset) != "JPAC2-10":
             raise Exception("Fatal! No JPAC2-10 data provided.")
 
         num_particles, num_textures, off_textures = struct.unpack_from(">HHi", buffer, offset + 0x8)
@@ -379,7 +378,7 @@ class JParticlesContainer:
 
     def pack(self):
         # Pack header
-        out_buf = bytearray() + "JPAC2-10".encode("ascii")
+        out_buf = bytearray() + pack_magic8("JPAC2-10")
         out_buf += struct.pack(">HHi", len(self.particles), len(self.textures), 0)
 
         # Pack JPAResource entries

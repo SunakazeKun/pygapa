@@ -28,7 +28,7 @@ def fix_draw_order(val: str):
 
 class ParticleEffect:
     def __init__(self):
-        self.index = -1
+        self.index = -1  # This will be calculated when saving
         self.group_name = ""
         self.anim_name = list()
         self.continue_anim_end = False
@@ -197,6 +197,36 @@ class ParticleEffect:
 
         return entry
 
+    def replace_with(self, other):
+        self.anim_name.clear()
+        self.effect_name.clear()
+
+        self.group_name = other.group_name
+        self.anim_name += other.anim_name
+        self.continue_anim_end = other.continue_anim_end
+        self.unique_name = other.unique_name
+        self.effect_name += other.effect_name
+        self.parent_name = other.parent_name
+        self.joint_name = other.joint_name
+        self.offset_x = other.offset_x
+        self.offset_y = other.offset_y
+        self.offset_z = other.offset_z
+        self.start_frame = other.start_frame
+        self.end_frame = other.end_frame
+        self.scale_value = other.scale_value
+        self.rate_value = other.rate_value
+        self.prm_color = other.prm_color
+        self.env_color = other.env_color
+        self.light_affect_value = other.light_affect_value
+        self.draw_order = other.draw_order
+
+        def copy_TRS(src: dict, dest: dict):
+            for flag in MATRIX_FLAGS:
+                dest[flag] = src[flag]
+
+        copy_TRS(other.affect, self.affect)
+        copy_TRS(other.follow, self.follow)
+
     def description(self):
         first = self.group_name if self.group_name != "" else "(undefined)"
         second = self.unique_name if self.unique_name != "" else "(undefined)"
@@ -206,7 +236,7 @@ class ParticleEffect:
 class ParticleData:
     def __init__(self):
         self.textures = dict()
-        self.particles = dict()
+        self.particles = list()
         self.effects = list()
 
     def unpack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
@@ -231,43 +261,15 @@ class ParticleData:
         print("Loading particle files...")
         for particle_name in in_json["particles"]:
             particle = jpac210.JPAResource()
+            particle.name = particle_name
             in_particle_json = read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
-
-            particle.unk4 = in_particle_json["unk4"]
-            particle.unk6 = in_particle_json["unk6"]
-            particle.texture_names = in_particle_json["textures"]
-
-            if "dynamicsBlock" in in_particle_json:
-                particle.dynamics_block = jpac210.JPADynamicsBlock()
-                particle.dynamics_block.unpack_json(in_particle_json["dynamicsBlock"])
-            if "fieldBlocks" in in_particle_json:
-                for field_block_json in in_particle_json["fieldBlocks"]:
-                    field_block = jpac210.JPAFieldBlock()
-                    field_block.unpack_json(field_block_json)
-                    particle.field_blocks.append(field_block)
-            if "keyBlocks" in in_particle_json:
-                for key_block_json in in_particle_json["keyBlocks"]:
-                    key_block = jpac210.JPAKeyBlock()
-                    key_block.unpack_json(key_block_json)
-                    particle.key_blocks.append(key_block)
-            if "baseShape" in in_particle_json:
-                particle.base_shape = jpac210.JPABaseShape()
-                particle.base_shape.unpack_json(in_particle_json["baseShape"])
-            if "extraShape" in in_particle_json:
-                particle.extra_shape = jpac210.JPAExtraShape()
-                particle.extra_shape.unpack_json(in_particle_json["extraShape"])
-            if "childShape" in in_particle_json:
-                particle.child_shape = jpac210.JPAChildShape()
-                particle.child_shape.unpack_json(in_particle_json["childShape"])
-            if "exTexShape" in in_particle_json:
-                particle.ex_tex_shape = jpac210.JPAExTexShape()
-                particle.ex_tex_shape.unpack_json(in_particle_json["exTexShape"])
+            particle.unpack_json(in_particle_json)
 
             for texture_name in particle.texture_names:
                 if texture_name in unused_texture_names:
                     unused_texture_names.remove(texture_name)
 
-            self.particles[particle_name] = particle
+            self.particles.append(particle)
 
         if len(unused_texture_names) > 0:
             print("Unused textures found:", unused_texture_names)
@@ -315,7 +317,10 @@ class ParticleData:
             particle_name = particle_name_entry["name"]
             particle_index = particle_name_entry["id"]
 
-            self.particles[particle_name] = particle_container.particles[particle_index]
+            particle = particle_container.particles[particle_index]
+            particle.name = particle_name
+
+            self.particles.append(particle)
 
     def pack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
         # Create JSON data that declares which particles and textures belong to this container
@@ -332,40 +337,9 @@ class ParticleData:
 
         # Collect particles and write individual JSONs
         print("Dump particles ...")
-        for jpa_name, jpa in self.particles.items():
-            out_json["particles"].append(jpa_name)
-
-            out_particle_json = {
-                "unk4": jpa.unk4,
-                "unk6": jpa.unk6
-            }
-
-            # Pack blocks
-            if jpa.dynamics_block:
-                out_particle_json["dynamicsBlock"] = jpa.dynamics_block.pack_json()
-            if len(jpa.field_blocks) > 0:
-                out_particle_json["fieldBlocks"] = list()
-
-                for field_block in jpa.field_blocks:
-                    out_particle_json["fieldBlocks"].append(field_block.pack_json())
-            if len(jpa.key_blocks) > 0:
-                out_particle_json["keyBlocks"] = list()
-
-                for key_block in jpa.key_blocks:
-                    out_particle_json["keyBlocks"].append(key_block.pack_json())
-            if jpa.base_shape:
-                out_particle_json["baseShape"] = jpa.base_shape.pack_json()
-            if jpa.extra_shape:
-                out_particle_json["extraShape"] = jpa.extra_shape.pack_json()
-            if jpa.child_shape:
-                out_particle_json["childShape"] = jpa.child_shape.pack_json()
-            if jpa.ex_tex_shape:
-                out_particle_json["exTexShape"] = jpa.ex_tex_shape.pack_json()
-
-            # Pack texture names
-            out_particle_json["textures"] = jpa.texture_names
-
-            write_json_file(os.path.join(particles_folder, f"{jpa_name}.json"), out_particle_json)
+        for jpa in self.particles:
+            out_json["particles"].append(jpa.name)
+            write_json_file(os.path.join(particles_folder, f"{jpa.name}.json"), jpa.pack_json())
 
         # Collect texture names and write texture BTIs
         print("Dump textures ...")
@@ -400,10 +374,9 @@ class ParticleData:
 
         # Names have to be alphabetically sorted as the game performs binary search
         index = 0
-        for particle_name in sorted(self.particles.keys()):
-            particle_names.entries.append({"name": particle_name, "id": index})
+        for particle in sorted(self.particles, key=lambda x: x.name):
+            particle_names.entries.append({"name": particle.name, "id": index})
 
-            particle = self.particles[particle_name]
             particle_container.particles.append(particle)
             particle.index = index
 

@@ -1,18 +1,18 @@
 import argparse
-import os
 import sys
 from copy import deepcopy
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
+from formats import jpac210
 from formats.helper import *
 import formats.particle_data as particle_data
 
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.2"
+APP_VERSION = "v0.3"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -21,6 +21,19 @@ PROGRAM = QApplication([])
 ICON = QtGui.QIcon()
 ICON.addFile("ui/icon.png", QtCore.QSize(32, 32))
 PROGRAM.setWindowIcon(ICON)
+
+# Setup exception hook to catch errors when PyQT crashes
+# thanks to reddit user GoBeWithYou
+old_excepthook = sys.excepthook
+
+
+def exception_hook(exctype, value, traceback):
+    print(exctype, value, traceback)
+    old_excepthook(exctype, value, traceback)
+    sys.exit(1)
+
+
+sys.excepthook = exception_hook
 
 
 class PygapaEditor(QMainWindow):
@@ -34,10 +47,13 @@ class PygapaEditor(QMainWindow):
         self.setWindowTitle(APP_TITLE)
 
         # Particle data holders
-        self.particle_data = particle_data.ParticleData()
+        self.particle_data = None
         self.particle_data_folder = None
         self.current_effect = None
         self.copied_effect = None
+        self.current_particle = None
+        self.copied_particle = None
+        self.current_texture = None
 
         # File menu actions
         self.actionExit.triggered.connect(lambda: PROGRAM.exit())
@@ -82,12 +98,30 @@ class PygapaEditor(QMainWindow):
         self.comboEffectDrawOrder.currentIndexChanged.connect(self.set_effect_draw_order)
 
         # Register particle editing actions
-        # nothing here yet lol
+        self.listParticles.itemSelectionChanged.connect(self.select_particle)
+
+        self.actionToolAdd.triggered.connect(self.add_particle)
+        self.actionToolDelete.triggered.connect(self.delete_particles)
+        self.actionToolClone.triggered.connect(self.clone_particles)
+        self.actionToolCopy.triggered.connect(self.copy_particle)
+        self.actionToolReplace.triggered.connect(self.replace_particle)
+        self.actionToolExport.triggered.connect(self.export_particles)
+        self.actionToolImport.triggered.connect(self.import_particles)
+
+        self.textParticleName.textEdited.connect(self.set_particle_name)
 
         # Register effect editing actions
+        self.listTextures.itemSelectionChanged.connect(self.select_texture)
+
+        self.actionToolAdd.triggered.connect(self.add_or_import_textures)
+        self.actionToolDelete.triggered.connect(self.delete_textures)
         self.actionToolExport.triggered.connect(self.export_textures)
+        self.actionToolImport.triggered.connect(self.add_or_import_textures)
 
         # Finalize UI and show it to user
+        self.actionAbout.triggered.connect(self.show_about)
+        self.tabContents.currentChanged.connect(self.update_toolbar)
+
         self.enable_all_components(False)
         self.show()
 
@@ -105,7 +139,12 @@ class PygapaEditor(QMainWindow):
             return
 
         self.reset_editor()
+
+        self.particle_data = particle_data.ParticleData()
         self.particle_data_folder = particle_folder_name
+        self.current_effect = None
+        self.current_particle = None
+        self.current_texture = None
 
         # Get input file paths
         fp_particles = os.path.join(self.particle_data_folder, "Particles.jpc")
@@ -123,8 +162,8 @@ class PygapaEditor(QMainWindow):
         for effect in self.particle_data.effects:
             self.listEffects.addItem(effect.description())
 
-        for particle in self.particle_data.particles.keys():
-            self.listParticles.addItem(particle)
+        for particle in self.particle_data.particles:
+            self.listParticles.addItem(particle.name)
 
         for texture in self.particle_data.textures.keys():
             self.listTextures.addItem(texture)
@@ -132,9 +171,12 @@ class PygapaEditor(QMainWindow):
         self.enable_all_components(True)
         self.widgetEffects.setEnabled(False)
 
-        self.status(f"Successfully loaded particle data from \"{self.particle_data_folder}\"")
+        self.status(f"Successfully loaded particle data from \"{self.particle_data_folder}\".")
 
     def save_particle_data(self):
+        if self.particle_data is None or self.contains_errors():
+            return
+
         if self.particle_data_folder is None:
             particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
             if len(particle_folder_name) == 0:
@@ -144,6 +186,9 @@ class PygapaEditor(QMainWindow):
         self.save_particle_data_to_folder()
 
     def save_as_particle_data(self):
+        if self.particle_data is None or self.contains_errors():
+            return
+
         particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
         if len(particle_folder_name) == 0:
             return
@@ -160,7 +205,52 @@ class PygapaEditor(QMainWindow):
         # Output packed data to JPC and BCSV files
         self.particle_data.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
 
-        self.status(f"Saved particle data to \"{self.particle_data_folder}\"")
+        self.status(f"Saved particle data to \"{self.particle_data_folder}\".")
+
+    def contains_errors(self):
+        error_log = list()
+        more_than_10 = False
+
+        def log_error(message: str):
+            nonlocal more_than_10
+            if len(error_log) == 10:
+                more_than_10 = True
+            else:
+                error_log.append(message)
+                return more_than_10
+
+        # Check particles for errors
+        particle_names = list()
+
+        for particle in self.particle_data.particles:
+            particle_name = particle.name
+
+            # Duplicate particle name?
+            if particle_name in particle_names:
+                if log_error(f"Duplicate particle \"{particle_name}\""):
+                    break
+
+            # Missing textures?
+            for texture_name in particle.texture_names:
+                if texture_name not in self.particle_data.textures:
+                    if log_error(f"Missing texture \"{texture_name}\""):
+                        break
+
+            particle_names.append(particle_name)
+
+        # No errors were found
+        if len(error_log) == 0:
+            return False
+        # Show critical error message if errors are found
+        else:
+            errors_message = "\n".join(error_log)
+            errors_message = "Can't save particle data due to these errors:\n\n" + errors_message
+
+            if more_than_10:
+                errors_message += "\n\n...and more!"
+
+            self.show_critical(errors_message)
+            return True
 
     # ---------------------------------------------------------------------------------------------
     # General UI helpers
@@ -169,6 +259,15 @@ class PygapaEditor(QMainWindow):
         color = "red" if fail else "green"
         self.statusBar.setStyleSheet(f"QStatusBar{{padding:8px;color:{color};}}")
         self.statusBar.showMessage(text, duration)
+
+    def show_information(self, text: str):
+        QMessageBox.information(self, APP_TITLE, text)
+
+    def show_warning(self, text: str):
+        QMessageBox.warning(self, APP_TITLE, text)
+
+    def show_critical(self, text: str):
+        QMessageBox.critical(self, APP_TITLE, text)
 
     def get_editor_mode(self):
         return self.tabContents.currentIndex()
@@ -184,6 +283,19 @@ class PygapaEditor(QMainWindow):
         self.listParticles.clear()
         self.listTextures.clear()
         self.enable_all_components(False)
+
+    def update_toolbar(self):
+        if self.get_editor_mode() == self.EDITOR_MODE_TEXTURE:
+            self.actionToolClone.setEnabled(False)
+            self.actionToolCopy.setEnabled(False)
+            self.actionToolReplace.setEnabled(False)
+        else:
+            self.actionToolClone.setEnabled(True)
+            self.actionToolCopy.setEnabled(True)
+            self.actionToolReplace.setEnabled(True)
+
+    def show_about(self):
+        self.show_information("Report any bugs and problems here:\nhttps://github.com/SunakazeKun/pygapa")
 
     # ---------------------------------------------------------------------------------------------
     # Effect editing
@@ -252,6 +364,9 @@ class PygapaEditor(QMainWindow):
     def delete_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
+        if len(self.listEffects.selectedItems()) == 0:
+            self.status("No effect(s) selected!", True)
+            return
 
         # Get selected list indexes
         delete_indexes = [i.row() for i in self.listEffects.selectionModel().selectedIndexes()]
@@ -268,6 +383,9 @@ class PygapaEditor(QMainWindow):
 
     def clone_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+            return
+        if len(self.listEffects.selectedItems()) == 0:
+            self.status("No effect(s) selected!", True)
             return
 
         # Get selected list indexes
@@ -300,7 +418,7 @@ class PygapaEditor(QMainWindow):
 
         self.copied_effect = deepcopy(self.particle_data.effects[self.listEffects.currentRow()])
 
-        self.status(f"Copied effect {self.copied_effect.description()}")
+        self.status(f"Copied effect {self.copied_effect.description()}.")
 
     def replace_effect(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
@@ -312,43 +430,15 @@ class PygapaEditor(QMainWindow):
             self.status("No effect copy available!", True)
             return
 
-        # Copy into current effect, we want to retain references to the effect entry
+        # Replace current effect, we want to preserve references to current effect and its members
         old_description = self.current_effect.description()
-
-        self.current_effect.anim_name.clear()
-        self.current_effect.effect_name.clear()
-
-        self.current_effect.group_name = self.copied_effect.group_name
-        self.current_effect.anim_name += self.copied_effect.anim_name
-        self.current_effect.continue_anim_end = self.copied_effect.continue_anim_end
-        self.current_effect.unique_name = self.copied_effect.unique_name
-        self.current_effect.effect_name += self.copied_effect.effect_name
-        self.current_effect.parent_name = self.copied_effect.parent_name
-        self.current_effect.joint_name = self.copied_effect.joint_name
-        self.current_effect.offset_x = self.copied_effect.offset_x
-        self.current_effect.offset_y = self.copied_effect.offset_y
-        self.current_effect.offset_z = self.copied_effect.offset_z
-        self.current_effect.start_frame = self.copied_effect.start_frame
-        self.current_effect.end_frame = self.copied_effect.end_frame
-        self.current_effect.scale_value = self.copied_effect.scale_value
-        self.current_effect.rate_value = self.copied_effect.rate_value
-        self.current_effect.prm_color = self.copied_effect.prm_color
-        self.current_effect.env_color = self.copied_effect.env_color
-        self.current_effect.light_affect_value = self.copied_effect.light_affect_value
-        self.current_effect.draw_order = self.copied_effect.draw_order
-
-        def copy_TRS(src: dict, dest: dict):
-            for flag in particle_data.MATRIX_FLAGS:
-                dest[flag] = src[flag]
-
-        copy_TRS(self.copied_effect.affect, self.current_effect.affect)
-        copy_TRS(self.copied_effect.follow, self.current_effect.follow)
+        self.current_effect.replace_with(self.copied_effect)
 
         # Update widgets and list
         self.select_effect()
-        self.update_current_effect_description()
+        self.update_current_effect_list_item()
 
-        self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}")
+        self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}.")
 
     def export_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
@@ -390,7 +480,7 @@ class PygapaEditor(QMainWindow):
         try:
             imported_effects = read_json_file(import_file)
         except Exception:
-            self.status(f"An error occured when importing from \"{import_file}\"", True)
+            self.show_critical(f"An error occured when importing from \"{import_file}\".")
             return
 
         # Select the first imported entry
@@ -408,18 +498,18 @@ class PygapaEditor(QMainWindow):
         self.listEffects.clearSelection()
         self.listEffects.setCurrentRow(new_index)
 
-        self.status(f"Imported {len(imported_effects)} effect(s) from \"{import_file}\"")
+        self.status(f"Imported {len(imported_effects)} effect(s) from \"{import_file}\".")
 
-    def update_current_effect_description(self):
+    def update_current_effect_list_item(self):
         self.listEffects.selectedItems()[0].setText(self.current_effect.description())
 
     def set_effect_group_name(self, text: str):
         self.current_effect.group_name = text
-        self.update_current_effect_description()
+        self.update_current_effect_list_item()
 
     def set_effect_unique_name(self, text: str):
         self.current_effect.unique_name = text
-        self.update_current_effect_description()
+        self.update_current_effect_list_item()
 
     def set_effect_effect_name(self):
         self.current_effect.effect_name = self.text_block_to_list(self.textEffectEffectName.toPlainText())
@@ -478,11 +568,279 @@ class PygapaEditor(QMainWindow):
     # ---------------------------------------------------------------------------------------------
     # Particle editing
     # ---------------------------------------------------------------------------------------------
-    # ~Placeholder section~
+    def select_particle(self):
+        # Make sure only one effect is selected
+        if len(self.listParticles.selectedItems()) != 1:
+            self.widgetParticles.setEnabled(False)
+            self.current_particle = None
+            return
+
+        # Enable all effect editing components and get currently selected effect instance
+        self.widgetParticles.setEnabled(True)
+        self.current_particle = self.particle_data.particles[self.listParticles.currentRow()]
+
+        # Block signals temporarily to prevent invoking textChanged
+        self.textParticleTextures.blockSignals(True)
+
+        # Populate effect data for currently selected item
+        self.textParticleName.setText(self.current_particle.name)
+        self.textParticleTextures.setPlainText("\n".join(self.current_particle.texture_names))
+
+        # Release blocked signals
+        self.textParticleTextures.blockSignals(False)
+
+    def add_particle(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+
+        self.show_critical("Adding new particles isn't supported yet!")
+
+    def delete_particles(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+        if len(self.listParticles.selectedItems()) == 0:
+            self.status("No particle(s) selected!", True)
+            return
+
+        # Get selected list indexes
+        delete_indexes = [i.row() for i in self.listParticles.selectionModel().selectedIndexes()]
+
+        # The selected indexes are shuffled, so we remove particles starting from the end of the list
+        delete_indexes.sort(reverse=True)
+
+        # Go through indexes and delete list item and the actual particle
+        for delete_index in delete_indexes:
+            self.listParticles.takeItem(delete_index)
+            self.particle_data.particles.pop(delete_index)
+
+        self.status(f"Deleted {len(delete_indexes)} particle(s).")
+
+    def clone_particles(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+        if len(self.listParticles.selectedItems()) == 0:
+            self.status("No particle(s) selected!", True)
+            return
+
+        # Get selected list indexes and sort them by original order
+        clone_indexes = [i.row() for i in self.listParticles.selectionModel().selectedIndexes()]
+        clone_indexes.sort()
+
+        # Make sure the first clone is selected afterwards
+        new_index = self.listParticles.count()
+
+        # Create deep clones of all effects and populate them to the respective lists
+        for clone_index in clone_indexes:
+            clone = deepcopy(self.particle_data.particles[clone_index])
+            self.particle_data.particles.append(clone)
+            self.listParticles.addItem(clone.name)
+
+        # Update list selection
+        self.listParticles.clearSelection()
+        self.listParticles.setCurrentRow(new_index)
+
+        self.status(f"Cloned {len(clone_indexes)} particle(s).")
+
+    def copy_particle(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+        if self.current_particle is None:
+            self.status("No particle selected!", True)
+            return
+
+        self.copied_particle = deepcopy(self.particle_data.particles[self.listParticles.currentRow()])
+
+        self.status(f"Copied particle {self.copied_particle.name}.")
+
+    def replace_particle(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+
+        if self.current_particle is None:
+            self.status("No particle selected!", True)
+            return
+        if self.copied_particle is None:
+            self.status("No particle copy available!", True)
+            return
+
+        # Replace current effect, we want to preserve references to current effect and its members
+        old_description = self.current_particle.name
+        self.current_particle.replace_with(self.copied_particle)
+
+        # Update widgets and list
+        self.select_particle()
+        self.update_current_particle_list_item()
+
+        self.status(f"Replaced particle {old_description} with {self.copied_particle.name}.")
+
+    def export_particles(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+        if len(self.listParticles.selectedItems()) == 0:
+            self.status("No particle(s) selected!", True)
+            return
+
+        export_folder = QFileDialog.getExistingDirectory(self, "Export particles to...")
+        if len(export_folder) == 0:
+            return
+
+        particle_indexes = [i.row() for i in self.listParticles.selectionModel().selectedIndexes()]
+        particle_indexes.sort()
+
+        for particle_index in particle_indexes:
+            particle = self.particle_data.particles[particle_index]
+            fp_out_particle = os.path.join(export_folder, f"{particle.name}.json")
+            write_json_file(fp_out_particle, particle.pack_json())
+
+        self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".")
+
+    def import_particles(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+            return
+
+        # Get selected JSON files
+        import_files = QFileDialog.getOpenFileNames(self, "Import from JSON files...", filter="JSON file (*.json)")[0]
+        new_particle_count = len(import_files)
+
+        if new_particle_count == 0:
+            return
+
+        # Select the first imported entry if no existing particles are replaced
+        new_index = self.listParticles.count()
+
+        # We only need to check existing entries for replacement
+        old_particle_count = len(self.particle_data.particles)
+        replaced_entries = 0
+
+        # Go through all particle JSON files
+        for import_file in import_files:
+            particle = jpac210.JPAResource()
+            particle.name = get_filename(import_file)
+            is_new_entry = True
+
+            # Try to read data from JSON file
+            try:
+                particle.unpack_json(read_json_file(import_file))
+            except Exception:
+                # todo: better exception handling?
+                self.show_critical(f"An error occured when importing from \"{import_file}\".")
+                new_particle_count -= 1
+                continue
+
+            # Check if particle has to be replaced
+            for particle_index in range(old_particle_count):
+                existing_particle = self.particle_data.particles[particle_index]
+
+                if existing_particle.name == particle.name:
+                    self.particle_data.particles[particle_index].replace_with(particle)
+
+                    new_index = particle_index  # Select last replaced particle
+                    replaced_entries += 1
+                    is_new_entry = False
+                    break
+
+            # Convert JSON entries to effects and add them to the respective lists
+            if is_new_entry:
+                self.particle_data.particles.append(particle)
+                self.listParticles.addItem(particle.name)
+
+        # Update effects list
+        self.listParticles.clearSelection()
+        self.listParticles.setCurrentRow(new_index)
+
+        self.status(f"Imported {new_particle_count} particle(s), replaced {replaced_entries} existing particle(s).")
+
+    def update_current_particle_list_item(self):
+        self.listParticles.selectedItems()[0].setText(self.current_particle.name)
+
+    def set_particle_name(self, text: str):
+        self.current_particle.name = text
+        self.update_current_particle_list_item()
 
     # ---------------------------------------------------------------------------------------------
     # Texture editing
     # ---------------------------------------------------------------------------------------------
+    def select_texture(self):
+        # Make sure only one texture is selected
+        if len(self.listTextures.selectedItems()) != 1:
+            # self.widgetTextures.setEnabled(False)
+            self.current_texture = None
+            return
+
+        # Enable all effect editing components and get currently selected effect instance
+        # self.widgetTextures.setEnabled(True)
+        self.current_texture = self.particle_data.textures[self.listTextures.currentItem().text()]
+
+    def add_or_import_textures(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+            return
+
+        # Get selected JSON files
+        import_files = QFileDialog.getOpenFileNames(self, "Import BTI files...", filter="BTI file (*.bti)")[0]
+        new_texture_count = len(import_files)
+
+        if new_texture_count == 0:
+            return
+
+        # Select the first imported entry if no existing particles are replaced
+        new_index = self.listTextures.count()
+        replaced_entries = 0
+
+        # Go through all BTI files
+        for import_file in import_files:
+            texture = jpac210.JPATexture()
+            texture.file_name = get_filename(import_file)
+            is_new_entry = True
+
+            # Try to read data from BTI file
+            try:
+                texture.bti_data = read_file(import_file)
+            except Exception:
+                # todo: better exception handling?
+                self.show_critical(f"An error occured when importing from \"{import_file}\".")
+                new_texture_count -= 1
+                continue
+
+            # Check if texture has to be replaced
+            if texture.file_name in self.particle_data.textures:
+                existing_texture = self.particle_data.textures[texture.file_name]
+                existing_texture.bti_data = texture.bti_data
+
+                new_index = list(self.particle_data.textures.keys()).index(texture.file_name)
+                replaced_entries += 1
+                is_new_entry = False
+
+            # Add texture to the respective lists
+            if is_new_entry:
+                self.particle_data.textures[texture.file_name] = texture
+                self.listTextures.addItem(texture.file_name)
+
+        # Update effects list
+        self.listTextures.clearSelection()
+        self.listTextures.setCurrentRow(new_index)
+
+        self.status(f"Imported {new_texture_count} texture(s), replaced {replaced_entries} existing texture(s).")
+
+    def delete_textures(self):
+        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+            return
+        if len(self.listTextures.selectedItems()) == 0:
+            self.status("No texture(s) selected!", True)
+            return
+
+        # Get selected list indexes
+        delete_indexes = [i.row() for i in self.listTextures.selectionModel().selectedIndexes()]
+
+        # The selected indexes are shuffled, so we remove particles starting from the end of the list
+        delete_indexes.sort(reverse=True)
+
+        # Go through indexes and delete list item and the actual particle
+        for delete_index in delete_indexes:
+            key = self.listTextures.takeItem(delete_index).text()
+            self.particle_data.textures.pop(key)
+
+        self.status(f"Deleted {len(delete_indexes)} particle(s).")
+
     def export_textures(self):
         if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
             return

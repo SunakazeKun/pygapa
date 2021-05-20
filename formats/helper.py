@@ -1,4 +1,5 @@
 import json
+import os
 import struct
 
 
@@ -152,6 +153,11 @@ def read_sjis_string(buffer, offset: int) -> str:
 def pack_sjis_string(val: str) -> bytes:
     """Encodes the string using SJIS and returns the packed bytes. Null-terminates the string if necessary"""
     return __pack_string("shift_jisx0213", val)
+
+
+def get_filename(val: str) -> str:
+    """Extracts the filename without extension from the specified file path."""
+    return os.path.splitext(os.path.basename(val))[0]
 
 
 # File I/O functions

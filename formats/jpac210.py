@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from formats.helper import *
 
 
@@ -30,6 +32,10 @@ class JPATexture:
         out_packed += out_name + out_pad_name + self.bti_data + out_pad_bti
 
         return out_packed
+
+    def replace_with(self, other):
+        self.file_name = other.file_name
+        self.bti_data = other.bti_data[:]
 
 
 class JPAChunk:
@@ -188,6 +194,7 @@ class JPAExTexShape(JPAChunk):
 
 class JPAResource:
     def __init__(self):
+        self.name = None
         self.dynamics_block = None   # JPADynamicsBlock
         self.field_blocks = list()   # list of JPAFieldBlock
         self.key_blocks = list()     # list of JPAKeyBlock
@@ -205,6 +212,7 @@ class JPAResource:
 
     def unpack(self, buffer, offset: int = 0):
         # Setup members
+        self.name = None
         self.dynamics_block = None
         self.field_blocks.clear()
         self.key_blocks.clear()
@@ -281,6 +289,44 @@ class JPAResource:
             self.total_size += size
             offset += size
 
+    def unpack_json(self, entry: dict):
+        self.field_blocks.clear()
+        self.key_blocks.clear()
+
+        self.texture_ids.clear()
+        self.texture_names = entry["textures"]
+
+        self.index = -1
+        self.unk4 = entry["unk4"]
+        self.unk6 = entry["unk6"]
+        self.total_size = 0
+
+        if "dynamicsBlock" in entry:
+            self.dynamics_block = JPADynamicsBlock()
+            self.dynamics_block.unpack_json(entry["dynamicsBlock"])
+        if "fieldBlocks" in entry:
+            for field_block_json in entry["fieldBlocks"]:
+                field_block = JPAFieldBlock()
+                field_block.unpack_json(field_block_json)
+                self.field_blocks.append(field_block)
+        if "keyBlocks" in entry:
+            for key_block_json in entry["keyBlocks"]:
+                key_block = JPAKeyBlock()
+                key_block.unpack_json(key_block_json)
+                self.key_blocks.append(key_block)
+        if "baseShape" in entry:
+            self.base_shape = JPABaseShape()
+            self.base_shape.unpack_json(entry["baseShape"])
+        if "extraShape" in entry:
+            self.extra_shape = JPAExtraShape()
+            self.extra_shape.unpack_json(entry["extraShape"])
+        if "childShape" in entry:
+            self.child_shape = JPAChildShape()
+            self.child_shape.unpack_json(entry["childShape"])
+        if "exTexShape" in entry:
+            self.ex_tex_shape = JPAExTexShape()
+            self.ex_tex_shape.unpack_json(entry["exTexShape"])
+
     def pack(self) -> bytes:
         # Pack header
         out_buf = bytearray() + struct.pack(">4h", self.index, 0, self.unk4, self.unk6)
@@ -332,6 +378,61 @@ class JPAResource:
         self.total_size = len(out_buf)
 
         return out_buf
+
+    def pack_json(self) -> dict:
+        entry = {
+            "unk4": self.unk4,
+            "unk6": self.unk6
+        }
+
+        # Pack blocks
+        if self.dynamics_block:
+            entry["dynamicsBlock"] = self.dynamics_block.pack_json()
+        if len(self.field_blocks) > 0:
+            entry["fieldBlocks"] = list()
+
+            for field_block in self.field_blocks:
+                entry["fieldBlocks"].append(field_block.pack_json())
+        if len(self.key_blocks) > 0:
+            entry["keyBlocks"] = list()
+
+            for key_block in self.key_blocks:
+                entry["keyBlocks"].append(key_block.pack_json())
+        if self.base_shape:
+            entry["baseShape"] = self.base_shape.pack_json()
+        if self.extra_shape:
+            entry["extraShape"] = self.extra_shape.pack_json()
+        if self.child_shape:
+            entry["childShape"] = self.child_shape.pack_json()
+        if self.ex_tex_shape:
+            entry["exTexShape"] = self.ex_tex_shape.pack_json()
+
+        # Pack texture names
+        entry["textures"] = self.texture_names
+
+        return entry
+
+    def replace_with(self, other):
+        self.name = other.name
+        self.field_blocks.clear()
+        self.key_blocks.clear()
+        self.texture_names.clear()
+        self.texture_names += other.texture_names
+        self.unk4 = other.unk4
+        self.unk6 = other.unk6
+
+        self.dynamics_block = deepcopy(other.dynamics_block)
+
+        for block in other.field_blocks:
+            self.field_blocks.append(deepcopy(block))
+
+        for block in other.key_blocks:
+            self.key_blocks.append(deepcopy(block))
+
+        self.base_shape = deepcopy(other.base_shape)
+        self.extra_shape = deepcopy(other.extra_shape)
+        self.child_shape = deepcopy(other.child_shape)
+        self.ex_tex_shape = deepcopy(other.ex_tex_shape)
 
 
 class JParticlesContainer:

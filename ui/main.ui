@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>918</width>
-    <height>713</height>
+    <height>723</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -45,17 +45,17 @@
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
             <width>360</width>
-            <height>16777215</height>
+            <height>0</height>
            </size>
           </property>
           <property name="locale">
            <locale language="English" country="UnitedStates"/>
           </property>
           <property name="selectionMode">
-           <enum>QAbstractItemView::ExtendedSelection</enum>
+           <enum>QAbstractItemView::ContiguousSelection</enum>
           </property>
          </widget>
         </item>
@@ -76,20 +76,20 @@
              <property name="horizontalSpacing">
               <number>24</number>
              </property>
-             <item row="1" column="1">
-              <widget class="QLineEdit" name="textEffectUniqueName">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
-             </item>
-             <item row="8" column="0">
+             <item row="9" column="0">
               <widget class="QLabel" name="labelEffectStartFrame">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
                 <string>Start frame</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLineEdit" name="textEffectUniqueName">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
                </property>
               </widget>
              </item>
@@ -113,7 +113,7 @@
                </property>
               </widget>
              </item>
-             <item row="15" column="1">
+             <item row="16" column="1">
               <widget class="QWidget" name="widgetEffectAffect" native="true">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -183,7 +183,7 @@
                </layout>
               </widget>
              </item>
-             <item row="7" column="0">
+             <item row="8" column="0">
               <widget class="QLabel" name="labelEffectContinueAnimEnd">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -193,23 +193,7 @@
                </property>
               </widget>
              </item>
-             <item row="19" column="1">
-              <widget class="QDoubleSpinBox" name="spinnerEffectLightAffectValue">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="decimals">
-                <number>4</number>
-               </property>
-               <property name="minimum">
-                <double>-999999.999900000053458</double>
-               </property>
-               <property name="maximum">
-                <double>999999.999900000053458</double>
-               </property>
-              </widget>
-             </item>
-             <item row="16" column="1">
+             <item row="17" column="1">
               <widget class="QWidget" name="widgetEffectFollow" native="true">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -276,17 +260,23 @@
                </layout>
               </widget>
              </item>
-             <item row="20" column="0">
-              <widget class="QLabel" name="labelEffectPrmColor">
+             <item row="20" column="1">
+              <widget class="QDoubleSpinBox" name="spinnerEffectLightAffectValue">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
-               <property name="text">
-                <string>Primary color</string>
+               <property name="decimals">
+                <number>4</number>
+               </property>
+               <property name="minimum">
+                <double>-999999.999900000053458</double>
+               </property>
+               <property name="maximum">
+                <double>999999.999900000053458</double>
                </property>
               </widget>
              </item>
-             <item row="18" column="0">
+             <item row="19" column="0">
               <widget class="QLabel" name="labelEffectRateValue">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -296,7 +286,7 @@
                </property>
               </widget>
              </item>
-             <item row="23" column="0">
+             <item row="24" column="0">
               <widget class="QLabel" name="labelEffectDrawOrder">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -306,7 +296,7 @@
                </property>
               </widget>
              </item>
-             <item row="5" column="0">
+             <item row="6" column="0">
               <widget class="QLabel" name="labelEffectJointName">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -316,27 +306,17 @@
                </property>
               </widget>
              </item>
-             <item row="17" column="0">
-              <widget class="QLabel" name="labelEffectScaleValue">
+             <item row="21" column="0">
+              <widget class="QLabel" name="labelEffectPrmColor">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
-                <string>Scale factor</string>
+                <string>Primary color</string>
                </property>
               </widget>
              </item>
              <item row="16" column="0">
-              <widget class="QLabel" name="labelEffectFollow">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>Follow matrix</string>
-               </property>
-              </widget>
-             </item>
-             <item row="15" column="0">
               <widget class="QLabel" name="labelEffectAffect">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -346,41 +326,28 @@
                </property>
               </widget>
              </item>
-             <item row="6" column="1">
-              <widget class="QPlainTextEdit" name="textEffectAnimName"/>
-             </item>
-             <item row="19" column="0">
-              <widget class="QLabel" name="labelEffectLightAffectValue">
+             <item row="17" column="0">
+              <widget class="QLabel" name="labelEffectFollow">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
-                <string>Light affect factor</string>
+                <string>Follow matrix</string>
+               </property>
+              </widget>
+             </item>
+             <item row="18" column="0">
+              <widget class="QLabel" name="labelEffectScaleValue">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Scale factor</string>
                </property>
               </widget>
              </item>
              <item row="7" column="1">
-              <widget class="QCheckBox" name="checkEffectContinueAnimEnd">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>Enabled?</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QLineEdit" name="textEffectGroupName">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
+              <widget class="QPlainTextEdit" name="textEffectAnimName"/>
              </item>
              <item row="0" column="0">
               <widget class="QLabel" name="labelEffectGroupName">
@@ -398,7 +365,20 @@
                </property>
               </widget>
              </item>
-             <item row="6" column="0">
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="textEffectGroupName">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="0">
               <widget class="QLabel" name="labelEffectAnimName">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -408,7 +388,7 @@
                </property>
               </widget>
              </item>
-             <item row="24" column="0">
+             <item row="25" column="0">
               <spacer name="verticalSpacer">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -424,13 +404,23 @@
                </property>
               </spacer>
              </item>
-             <item row="21" column="0">
-              <widget class="QLabel" name="labelEffectEnvColor">
+             <item row="20" column="0">
+              <widget class="QLabel" name="labelEffectLightAffectValue">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
-                <string>Environment color</string>
+                <string>Light affect factor</string>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="1">
+              <widget class="QCheckBox" name="checkEffectContinueAnimEnd">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Enabled?</string>
                </property>
               </widget>
              </item>
@@ -441,23 +431,7 @@
                </property>
               </widget>
              </item>
-             <item row="17" column="1">
-              <widget class="QDoubleSpinBox" name="spinnerEffectScaleValue">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="decimals">
-                <number>4</number>
-               </property>
-               <property name="minimum">
-                <double>-999999.999900000053458</double>
-               </property>
-               <property name="maximum">
-                <double>999999.999900000053458</double>
-               </property>
-              </widget>
-             </item>
-             <item row="23" column="1">
+             <item row="24" column="1">
               <widget class="QComboBox" name="comboEffectDrawOrder">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -514,7 +488,33 @@
                </item>
               </widget>
              </item>
+             <item row="22" column="0">
+              <widget class="QLabel" name="labelEffectEnvColor">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Environment color</string>
+               </property>
+              </widget>
+             </item>
              <item row="18" column="1">
+              <widget class="QDoubleSpinBox" name="spinnerEffectScaleValue">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="decimals">
+                <number>4</number>
+               </property>
+               <property name="minimum">
+                <double>-999999.999900000053458</double>
+               </property>
+               <property name="maximum">
+                <double>999999.999900000053458</double>
+               </property>
+              </widget>
+             </item>
+             <item row="19" column="1">
               <widget class="QDoubleSpinBox" name="spinnerEffectRateValue">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -530,28 +530,28 @@
                </property>
               </widget>
              </item>
-             <item row="20" column="1">
-              <widget class="QLineEdit" name="textEffectPrmColor">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
-             </item>
-             <item row="21" column="1">
-              <widget class="QLineEdit" name="textEffectEnvColor">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
-             </item>
-             <item row="12" column="0">
+             <item row="13" column="0">
               <widget class="QLabel" name="labelEffectOffset">
                <property name="text">
                 <string>Offset</string>
                </property>
               </widget>
              </item>
-             <item row="12" column="1">
+             <item row="22" column="1">
+              <widget class="QLineEdit" name="textEffectEnvColor">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="21" column="1">
+              <widget class="QLineEdit" name="textEffectPrmColor">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="13" column="1">
               <widget class="QWidget" name="widgetEffectOffset" native="true">
                <layout class="QHBoxLayout" name="horizontalLayout_3">
                 <property name="leftMargin">
@@ -650,7 +650,17 @@
                </layout>
               </widget>
              </item>
-             <item row="8" column="1">
+             <item row="10" column="0">
+              <widget class="QLabel" name="labelEffectEndFrame">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>End frame</string>
+               </property>
+              </widget>
+             </item>
+             <item row="9" column="1">
               <widget class="QSpinBox" name="spinnerEffectStartFrame">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -663,17 +673,7 @@
                </property>
               </widget>
              </item>
-             <item row="9" column="0">
-              <widget class="QLabel" name="labelEffectEndFrame">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>End frame</string>
-               </property>
-              </widget>
-             </item>
-             <item row="9" column="1">
+             <item row="10" column="1">
               <widget class="QSpinBox" name="spinnerEffectEndFrame">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -689,7 +689,10 @@
                </property>
               </widget>
              </item>
-             <item row="5" column="1">
+             <item row="2" column="1">
+              <widget class="QPlainTextEdit" name="textEffectEffectName"/>
+             </item>
+             <item row="6" column="1">
               <widget class="QLineEdit" name="textEffectJointName">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -706,8 +709,19 @@
                </property>
               </widget>
              </item>
-             <item row="2" column="1">
-              <widget class="QPlainTextEdit" name="textEffectEffectName"/>
+             <item row="5" column="0" colspan="2">
+              <widget class="Line" name="line_2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="11" column="0" colspan="2">
+              <widget class="Line" name="line_3">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>
@@ -720,7 +734,7 @@
        <attribute name="title">
         <string>Particles</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout_3">
+       <layout class="QGridLayout" name="gridLayout_3" columnstretch="4,0">
         <item row="0" column="0">
          <widget class="QListWidget" name="listParticles">
           <property name="sizePolicy">
@@ -729,19 +743,173 @@
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
             <width>360</width>
-            <height>16777215</height>
+            <height>0</height>
            </size>
           </property>
+          <property name="locale">
+           <locale language="English" country="UnitedStates"/>
+          </property>
           <property name="selectionMode">
-           <enum>QAbstractItemView::ExtendedSelection</enum>
+           <enum>QAbstractItemView::ContiguousSelection</enum>
           </property>
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="QWidget" name="widget_2" native="true"/>
+         <widget class="QWidget" name="widgetParticles" native="true">
+          <property name="locale">
+           <locale language="English" country="UnitedStates"/>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_7">
+           <item row="0" column="0">
+            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0,0" columnstretch="2,0">
+             <property name="horizontalSpacing">
+              <number>24</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>6</number>
+             </property>
+             <item row="2" column="0">
+              <widget class="QLabel" name="labelParticleName">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Name</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QPlainTextEdit" name="textParticleTextures">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="labelParticleTextures">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Textures</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLineEdit" name="textParticleName">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="labelParticleBlocks">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Blocks</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QTreeWidget" name="treeParticleBlocks">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="rootIsDecorated">
+                <bool>true</bool>
+               </property>
+               <attribute name="headerVisible">
+                <bool>false</bool>
+               </attribute>
+               <column>
+                <property name="text">
+                 <string notr="true">1</string>
+                </property>
+               </column>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <spacer name="verticalSpacer_2">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>40</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="0" colspan="2">
+              <widget class="QLabel" name="labelParticleInfo">
+               <property name="palette">
+                <palette>
+                 <active>
+                  <colorrole role="WindowText">
+                   <brush brushstyle="SolidPattern">
+                    <color alpha="255">
+                     <red>255</red>
+                     <green>0</green>
+                     <blue>0</blue>
+                    </color>
+                   </brush>
+                  </colorrole>
+                 </active>
+                 <inactive>
+                  <colorrole role="WindowText">
+                   <brush brushstyle="SolidPattern">
+                    <color alpha="255">
+                     <red>255</red>
+                     <green>0</green>
+                     <blue>0</blue>
+                    </color>
+                   </brush>
+                  </colorrole>
+                 </inactive>
+                 <disabled>
+                  <colorrole role="WindowText">
+                   <brush brushstyle="SolidPattern">
+                    <color alpha="255">
+                     <red>120</red>
+                     <green>120</green>
+                     <blue>120</blue>
+                    </color>
+                   </brush>
+                  </colorrole>
+                 </disabled>
+                </palette>
+               </property>
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>All particles are automatically sorted when saved as the game performs binary search.</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0" colspan="2">
+              <widget class="Line" name="line">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -749,28 +917,19 @@
        <attribute name="title">
         <string>Textures</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout_4">
+       <layout class="QGridLayout" name="gridTextures">
         <item row="0" column="0">
          <widget class="QListWidget" name="listTextures">
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Maximum" vsizetype="Expanding">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>360</width>
-            <height>16777215</height>
-           </size>
           </property>
           <property name="selectionMode">
            <enum>QAbstractItemView::ExtendedSelection</enum>
           </property>
          </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QWidget" name="widget_3" native="true"/>
         </item>
        </layout>
       </widget>
@@ -794,9 +953,6 @@
     <addaction name="actionOpen"/>
     <addaction name="actionSave"/>
     <addaction name="actionSaveAs"/>
-    <addaction name="separator"/>
-    <addaction name="actionExportAll"/>
-    <addaction name="actionImportFrom"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
@@ -823,7 +979,7 @@
     <enum>TopToolBarArea</enum>
    </attribute>
    <attribute name="toolBarBreak">
-    <bool>true</bool>
+    <bool>false</bool>
    </attribute>
    <addaction name="actionToolAdd"/>
    <addaction name="actionToolDelete"/>
@@ -874,16 +1030,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+S</string>
-   </property>
-  </action>
-  <action name="actionExportAll">
-   <property name="text">
-    <string>Export all</string>
-   </property>
-  </action>
-  <action name="actionImportFrom">
-   <property name="text">
-    <string>Import all</string>
    </property>
   </action>
   <action name="actionExit">

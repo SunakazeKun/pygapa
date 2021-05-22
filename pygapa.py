@@ -208,6 +208,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Saved particle data to \"{self.particle_data_folder}\".")
 
     def contains_errors(self):
+        # todo: improve this, duh
         error_log = list()
         more_than_10 = False
 
@@ -217,7 +218,7 @@ class PygapaEditor(QMainWindow):
                 more_than_10 = True
             else:
                 error_log.append(message)
-                return more_than_10
+            return more_than_10
 
         # Check particles for errors
         particle_names = list()
@@ -584,6 +585,7 @@ class PygapaEditor(QMainWindow):
 
         # Populate effect data for currently selected item
         self.textParticleName.setText(self.current_particle.name)
+        self.spnParticleUnk6.setValue(self.current_particle.unk6)
         self.textParticleTextures.setPlainText("\n".join(self.current_particle.texture_names))
 
         # Release blocked signals

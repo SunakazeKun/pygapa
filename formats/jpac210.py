@@ -206,7 +206,6 @@ class JPAResource:
         self.texture_names = list()  # List of texture file names, will be populated later on
 
         self.index = 0               # The particles index inside the container
-        self.unk4 = 0                # Unknown as of now, may be two separate bytes
         self.unk6 = 0                # Unknown as of now, may be two separate bytes
         self.total_size = 0          # Total size in bytes, set when (un)packing
 
@@ -225,7 +224,7 @@ class JPAResource:
         self.total_size = 8  # In SMG, the first 8 bytes are the header for JPAResource
 
         # Parse header
-        self.index, num_sections, self.unk4, self.unk6 = struct.unpack_from(">4h", buffer, offset)
+        self.index, num_sections, num_field_blocks, num_key_blocks, self.unk6 = struct.unpack_from(">2h2Bh", buffer, offset)
         offset += self.total_size
 
         # Go through all available sections
@@ -289,6 +288,11 @@ class JPAResource:
             self.total_size += size
             offset += size
 
+        if num_key_blocks != len(self.key_blocks):
+            raise Exception(f"Expected {num_key_blocks} key blocks, found {len(self.key_blocks)}")
+        if num_field_blocks != len(self.field_blocks):
+            raise Exception(f"Expected {num_field_blocks} field blocks, found {len(self.field_blocks)}")
+
     def unpack_json(self, entry: dict):
         self.field_blocks.clear()
         self.key_blocks.clear()
@@ -297,7 +301,6 @@ class JPAResource:
         self.texture_names = entry["textures"]
 
         self.index = -1
-        self.unk4 = entry["unk4"]
         self.unk6 = entry["unk6"]
         self.total_size = 0
 
@@ -329,7 +332,9 @@ class JPAResource:
 
     def pack(self) -> bytes:
         # Pack header
-        out_buf = bytearray() + struct.pack(">4h", self.index, 0, self.unk4, self.unk6)
+        num_field_blocks = len(self.field_blocks)
+        num_key_blocks = len(self.key_blocks)
+        out_buf = bytearray() + struct.pack(">2h2Bh", self.index, 0, num_field_blocks, num_key_blocks, self.unk6)
 
         # Pack blocks
         num_sections = 0
@@ -381,7 +386,6 @@ class JPAResource:
 
     def pack_json(self) -> dict:
         entry = {
-            "unk4": self.unk4,
             "unk6": self.unk6
         }
 
@@ -418,7 +422,6 @@ class JPAResource:
         self.key_blocks.clear()
         self.texture_names.clear()
         self.texture_names += other.texture_names
-        self.unk4 = other.unk4
         self.unk6 = other.unk6
 
         self.dynamics_block = deepcopy(other.dynamics_block)

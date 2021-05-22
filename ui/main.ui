@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>918</width>
-    <height>723</height>
+    <height>741</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -764,13 +764,47 @@
           </property>
           <layout class="QGridLayout" name="gridLayout_7">
            <item row="0" column="0">
-            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0,0" columnstretch="2,0">
+            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0,0,0" columnstretch="2,0">
              <property name="horizontalSpacing">
               <number>24</number>
              </property>
              <property name="verticalSpacing">
               <number>6</number>
              </property>
+             <item row="3" column="0">
+              <widget class="QLabel" name="labelParticleUnk6">
+               <property name="text">
+                <string>Unk. 6</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QSpinBox" name="spnParticleUnk6">
+               <property name="minimum">
+                <number>-32768</number>
+               </property>
+               <property name="maximum">
+                <number>32767</number>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QPlainTextEdit" name="textParticleTextures">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="labelParticleTextures">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Textures</string>
+               </property>
+              </widget>
+             </item>
              <item row="2" column="0">
               <widget class="QLabel" name="labelParticleName">
                <property name="locale">
@@ -781,20 +815,13 @@
                </property>
               </widget>
              </item>
-             <item row="3" column="1">
-              <widget class="QPlainTextEdit" name="textParticleTextures">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="labelParticleTextures">
+             <item row="5" column="0">
+              <widget class="QLabel" name="labelParticleBlocks">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
-                <string>Textures</string>
+                <string>Blocks</string>
                </property>
               </widget>
              </item>
@@ -805,35 +832,7 @@
                </property>
               </widget>
              </item>
-             <item row="4" column="0">
-              <widget class="QLabel" name="labelParticleBlocks">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>Blocks</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="1">
-              <widget class="QTreeWidget" name="treeParticleBlocks">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="rootIsDecorated">
-                <bool>true</bool>
-               </property>
-               <attribute name="headerVisible">
-                <bool>false</bool>
-               </attribute>
-               <column>
-                <property name="text">
-                 <string notr="true">1</string>
-                </property>
-               </column>
-              </widget>
-             </item>
-             <item row="5" column="0">
+             <item row="6" column="0">
               <spacer name="verticalSpacer_2">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
@@ -904,6 +903,24 @@
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
                </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QTreeWidget" name="treeParticleBlocks">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="rootIsDecorated">
+                <bool>true</bool>
+               </property>
+               <attribute name="headerVisible">
+                <bool>false</bool>
+               </attribute>
+               <column>
+                <property name="text">
+                 <string notr="true">1</string>
+                </property>
+               </column>
               </widget>
              </item>
             </layout>

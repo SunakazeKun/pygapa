@@ -11,11 +11,11 @@ class JPATexture:
 
     def unpack(self, buffer, offset: int = 0):
         self.total_size = get_s32(buffer, offset + 0x4)
-        self.file_name = read_sjis_string(buffer, offset + 0xC)
+        self.file_name = read_sjis(buffer, offset + 0xC)
         self.bti_data = buffer[offset + 0x20:offset + self.total_size]
 
     def pack(self) -> bytes:
-        out_name = pack_sjis_string(self.file_name)
+        out_name = pack_sjis(self.file_name)
 
         # Calculate and create padding bytes
         pad_name = 0x14 - len(out_name)
@@ -432,64 +432,66 @@ class JParticlesContainer:
         if get_magic8(buffer, offset) != "JPAC2-10":
             raise Exception("Fatal! No JPAC2-10 data provided.")
 
-        num_particles, num_textures, off_textures = struct.unpack_from(">HHi", buffer, offset + 0x8)
+        num_particles, num_textures, off_textures = struct.unpack_from(">HHI", buffer, offset + 0x8)
+
+        # Parse JPATexture entries
+        # We parse them first as we need the texture filenames for particles. This saves loading time as we do not have
+        # to go through all the particles twice. However, in the actual JPC file, the particle data comes first.
+        texture_filenames = list()
+        next_offset = offset + off_textures
+
+        for i in range(num_textures):
+            texture = JPATexture()
+            texture.unpack(buffer, next_offset)
+
+            texture_filenames.append(texture.file_name)
+            self.textures[texture.file_name] = texture
+            next_offset += texture.total_size
 
         # Parse JPAResource entries
         next_offset = offset + 0x10
 
         for i in range(num_particles):
-            jpa = JPAResource()
-            jpa.unpack(buffer, next_offset)
+            particle = JPAResource()
+            particle.unpack(buffer, next_offset)
 
-            self.particles.append(jpa)
-            next_offset += jpa.total_size
+            # Append texture file names for every particle
+            for texture_index in particle.texture_ids:
+                particle.texture_names.append(texture_filenames[texture_index])
 
-        # Parse JPATexture entries
-        texture_filenames = list()
-        next_offset = offset + off_textures
-
-        for i in range(num_textures):
-            jpatex = JPATexture()
-            jpatex.unpack(buffer, next_offset)
-
-            texture_filenames.append(jpatex.file_name)
-            self.textures[jpatex.file_name] = jpatex
-            next_offset += jpatex.total_size
-
-        # Append texture file names for every particle
-        for jpa in self.particles:
-            for texture_index in jpa.texture_ids:
-                jpa.texture_names.append(texture_filenames[texture_index])
+            self.particles.append(particle)
+            next_offset += particle.total_size
 
     def pack(self):
-        # Pack header
+        # Pack header, we will write the textures offset later
         out_buf = bytearray() + pack_magic8("JPAC2-10")
-        out_buf += struct.pack(">HHi", len(self.particles), len(self.textures), 0)
+        out_buf += struct.pack(">HHI", len(self.particles), len(self.textures), 0)
 
         # Pack JPAResource entries
         texture_name_to_id = list(self.textures.keys())
 
-        for jpa in self.particles:
+        for particle in self.particles:
             # Get texture IDs from texture names
-            jpa.texture_ids.clear()
+            particle.texture_ids.clear()
 
-            for texture_name in jpa.texture_names:
-                texture_id = texture_name_to_id.index(texture_name)
-                if texture_id == -1:
-                    raise Exception(f"Unknown texture name {texture_name}. Is this in the JSON's texture list?")
+            for texture_name in particle.texture_names:
+                # This error can only occur in batch mode since the editor prevents saving if the error check finds
+                # invalid texture names.
+                try:
+                    particle.texture_ids.append(texture_name_to_id.index(texture_name))
+                except ValueError:
+                    pass
 
-                jpa.texture_ids.append(texture_id)
-
-            out_buf += jpa.pack()
+            out_buf += particle.pack()
 
         # Align buffer and write offset to textures
         out_buf += align32(out_buf)
-        struct.pack_into(">i", out_buf, 0xC, len(out_buf))
+        struct.pack_into(">I", out_buf, 0xC, len(out_buf))
 
         # Pack JPATexture entries
-        for jpatex in self.textures.values():
-            out_buf += jpatex.pack()
-        # no padding necessary here since textures are already aligned to 32 bytes
+        for texture in self.textures.values():
+            out_buf += texture.pack()
+        # No padding necessary here since textures are already aligned to 32 bytes
 
-        # Assemble and return packed data
+        # Return packed data
         return out_buf

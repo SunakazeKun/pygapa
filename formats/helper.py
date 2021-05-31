@@ -122,35 +122,35 @@ def pack_magic8(val: str) -> bytes:
 
 
 # String helper functions
-def __read_string(chset: str, buffer, offset: int = 0) -> str:
+def __read_string(charset: str, buffer, offset: int = 0) -> str:
     end = offset
     while end < len(buffer) - 1 and buffer[end] != 0:
         end += 1
-    return buffer[offset:end + 1].decode(chset).strip("\0")
+    return buffer[offset:end + 1].decode(charset).strip("\0")
 
 
-def __pack_string(chset: str, val: str) -> bytes:
+def __pack_string(charset: str, val: str) -> bytes:
     if not val.endswith("\0"):
         val += "\0"
-    return val.encode(chset)
+    return val.encode(charset)
 
 
-def read_ascii_string(buffer, offset: int = 0) -> str:
+def read_ascii(buffer, offset: int = 0) -> str:
     """Decodes and returns the ASCII string at the buffer's specified offset."""
     return __read_string("ascii", buffer, offset)
 
 
-def pack_ascii_string(val: str) -> bytes:
+def pack_ascii(val: str) -> bytes:
     """Encodes the string using ASCII and returns the packed bytes. Null-terminates the string if necessary"""
     return __pack_string("ascii", val)
 
 
-def read_sjis_string(buffer, offset: int) -> str:
+def read_sjis(buffer, offset: int) -> str:
     """Decodes and returns the SJIS string at the buffer's specified offset."""
     return __read_string("shift_jisx0213", buffer, offset)
 
 
-def pack_sjis_string(val: str) -> bytes:
+def pack_sjis(val: str) -> bytes:
     """Encodes the string using SJIS and returns the packed bytes. Null-terminates the string if necessary"""
     return __pack_string("shift_jisx0213", val)
 
@@ -162,59 +162,59 @@ def get_filename(val: str) -> str:
 
 # File I/O functions
 
-def read_file(fp) -> bytearray:
+def read_file(file_path) -> bytearray:
     """Reads the binary data from the specified file and returns it as a bytearray."""
-    with open(fp, "rb") as f:
+    with open(file_path, "rb") as f:
         ret = f.read()
     return bytearray(ret)
 
 
-def write_file(fp, buf):
+def write_file(file_path, buffer):
     """Writes the contents of a bytes-like object to the specified file."""
-    with open(fp, "wb") as f:
-        f.write(buf)
+    with open(file_path, "wb") as f:
+        f.write(buffer)
         f.flush()
 
 
-def read_json_file(fp):
-    """Reads the JSON data from the specified file using UTF-8 encoding."""
-    with open(fp, "r", encoding="utf-8") as f:
+def read_json_file(file_path):
+    """Reads the JSON data from the specified file. This assumes that the file uses UTF-8 encoding."""
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
 
 
-def write_json_file(fp: str, data):
-    """Writes the JSON data to the specified file using UTF-8 encoding."""
-    with open(fp, "w", encoding="utf-8") as f:
+def write_json_file(file_path: str, data):
+    """Writes the JSON data to the specified file using UTF-8 encoding. Each level/node is indented by four spaces."""
+    with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
         f.flush()
 
 
 # Buffer alignment functions
 
-def __align(buffer, size, padchr):
+def __align(buffer, size, pad_chr):
     """Returns the padding bytes required to align the buffer to the specified size."""
-    padlen = len(buffer) & (size - 1)
-    if padlen != 0:
-        return bytearray([ord(padchr)] * (size - padlen))
+    pad_len = len(buffer) & (size - 1)
+    if pad_len != 0:
+        return bytearray([ord(pad_chr)] * (size - pad_len))
     return bytearray()
 
 
-def align4(buffer, padchr="\0"):
+def align4(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 4 bytes."""
-    return __align(buffer, 4, padchr)
+    return __align(buffer, 4, pad_chr)
 
 
-def align8(buffer, padchr="\0"):
+def align8(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 8 bytes."""
-    return __align(buffer, 8, padchr)
+    return __align(buffer, 8, pad_chr)
 
 
-def align16(buffer, padchr="\0"):
+def align16(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 16 bytes."""
-    return __align(buffer, 16, padchr)
+    return __align(buffer, 16, pad_chr)
 
 
-def align32(buffer, padchr="\0"):
+def align32(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 32 bytes."""
-    return __align(buffer, 32, padchr)
+    return __align(buffer, 32, pad_chr)

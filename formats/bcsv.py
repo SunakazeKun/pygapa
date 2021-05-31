@@ -2,31 +2,38 @@ from formats.helper import *
 
 # Hash and field name helpers
 HASHED_FIELD_NAMES = dict()
+
+
+def field_name_to_hash(field_name: str) -> int:
+    """Calculates the 32-bit lookup hash for the specified SJIS field name string."""
+    field_hash = 0
+    for ch in field_name.encode("shift_jisx0213"):
+        field_hash *= 31
+        field_hash += ch
+    return field_hash & 0xFFFFFFFF
+
+
+def hash_to_field_name(field_hash: int) -> str:
+    """Attempts to retrieve a known and valid field name for the specified field hash."""
+    if field_hash in HASHED_FIELD_NAMES:
+        return HASHED_FIELD_NAMES[field_hash]
+    else:
+        return f"[{field_hash:08X}]"
+
+
+# Populate known field names and their hashes
 __FIELD_NAMES = [
     "name", "id", "No", "GroupName", "AnimName", "ContinueAnimEnd", "UniqueName", "EffectName", "ParentName",
     "JointName", "OffsetX", "OffsetY", "OffsetZ", "StartFrame", "EndFrame", "Affect", "Follow", "ScaleValue",
     "RateValue", "PrmColor", "EnvColor", "LightAffectValue", "DrawOrder"
 ]
 
-
-def field_name_to_hash(fname: str) -> int:
-    fhash = 0
-    for c in fname:
-        fhash *= 31
-        fhash += ord(c)
-    return fhash & 0xFFFFFFFF
-
-
-def hash_to_field_name(fhash: int) -> str:
-    if fhash in HASHED_FIELD_NAMES:
-        return HASHED_FIELD_NAMES[fhash]
-    else:
-        return f"[{fhash:08X}]"
-
-
-# Populate hashed field names
 for field in __FIELD_NAMES:
     HASHED_FIELD_NAMES[field_name_to_hash(field)] = field
+
+# We don't need the list of field names anymore
+__FIELD_NAMES.clear()
+del __FIELD_NAMES
 
 
 # Field type identifiers
@@ -37,21 +44,22 @@ FIELD_TYPE_S16 = 4
 FIELD_TYPE_U8 = 5
 FIELD_TYPE_STRING = 6
 FIELD_SIZES = [4, -1, 4, 4, 2, 1, 4]
+FIELD_MASKS = [0xFFFFFFFF, -1, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFF, 0xFF, 0xFFFFFFFF]
 
 
-def is_valid_field(ftype: int):
-    if ftype == 1 or ftype < FIELD_TYPE_S32 or ftype > FIELD_TYPE_STRING:
-        raise Exception(f"Unknown field type 0x{ftype:02X}")
+def is_valid_field(field_type: int):
+    if field_type == 1 or field_type < FIELD_TYPE_S32 or field_type > FIELD_TYPE_STRING:
+        raise Exception(f"Unknown field type 0x{field_type:02X}")
 
 
 class Field:
-    def __init__(self, fhash, mask, offset, shift, ftype, name):
-        self.hash = fhash
+    def __init__(self, field_hash, mask, offset, shift, field_type, field_name):
+        self.hash = field_hash
         self.mask = mask
         self.offset = offset
         self.shift = shift
-        self.type = ftype
-        self.name = name
+        self.type = field_type
+        self.name = field_name
 
 
 class Bcsv:
@@ -59,24 +67,17 @@ class Bcsv:
         self.fields = dict()
         self.entries = list()
 
-    def new_field(self, fname, ftype):
-        is_valid_field(ftype)
+    def new_field(self, field_name, field_type):
+        # Does a field with that name exist already?
+        if field_name in self.fields:
+            raise Exception(f"Field {field_name} already exists!")
 
-        if fname in self.fields:
-            raise Exception(f"Field {fname} already exists!")
+        is_valid_field(field_type)
 
-        if ftype == FIELD_TYPE_S16:
-            mask = 0xFFFF
-        elif ftype == FIELD_TYPE_U8:
-            mask = 0xFF
-        else:
-            mask = 0xFFFFFFFF
-
-        offset = 0
-        for f in self.fields.values():
-            offset += FIELD_SIZES[f.type]
-
-        self.fields[fname] = Field(field_name_to_hash(fname), mask, offset, 0, ftype, fname)
+        # Create new field
+        field_hash = field_name_to_hash(field_name)
+        mask = FIELD_MASKS[field_type]
+        self.fields[field_name] = Field(field_hash, mask, -1, 0, field_type, field_name)
 
     def unpack(self, buffer, offset: int = 0):
         self.fields.clear()
@@ -91,11 +92,11 @@ class Bcsv:
         for i in range(num_fields):
             off_field = offset + 0x10 + i * 0xC
 
-            fhash, mask, entry_offset, shift, ftype = struct.unpack_from(">IIHBB", buffer, off_field)
-            is_valid_field(ftype)
-            fname = hash_to_field_name(fhash)
+            field_hash, mask, entry_offset, shift, field_type = struct.unpack_from(">IIHBB", buffer, off_field)
+            is_valid_field(field_type)
+            field_name = hash_to_field_name(field_hash)
 
-            self.fields[fname] = Field(fhash, mask, entry_offset, shift, ftype, fname)
+            self.fields[field_name] = Field(field_hash, mask, entry_offset, shift, field_type, field_name)
 
         # Read entries
         for i in range(num_entries):
@@ -108,26 +109,28 @@ class Bcsv:
                 if f.type == FIELD_TYPE_S32 or f.type == FIELD_TYPE_S32_2:
                     val = (get_s32(buffer, offset) & f.mask) >> f.shift
 
-                    if val & (1 << 31) != 0:  # make signed int
+                    # Make signed int
+                    if val & (1 << 31) != 0:
                         val |= ~0xFFFFFFFF
                 elif f.type == FIELD_TYPE_F32:
                     val = round(get_f32(buffer, offset), 7)
                 elif f.type == FIELD_TYPE_S16:
                     val = (get_s16(buffer, offset) & f.mask) >> f.shift
 
-                    if val & (1 << 15) != 0:  # make signed short
+                    # Make signed short
+                    if val & (1 << 15) != 0:
                         val |= ~0xFFFF
                 elif f.type == FIELD_TYPE_U8:
                     val = (get_u8(buffer, offset) & f.mask) >> f.shift
                 elif f.type == FIELD_TYPE_STRING:
                     off_string = off_strings + get_s32(buffer, offset)
-                    val = read_sjis_string(buffer, off_string)
+                    val = read_sjis(buffer, off_string)
 
                 entry[f.name] = val
 
             self.entries.append(entry)
 
-    def pack(self, sort_by_field: str = None) -> bytearray:
+    def pack(self, sort_by_field: str = None):
         buf_out = bytearray()
 
         # Sort entries by field if specified
@@ -140,11 +143,12 @@ class Bcsv:
         len_data_entry = 0
 
         for f in self.fields.values():
-            is_valid_field(f.type)
+            f.offset = len_data_entry  # Fix offset
             len_data_entry += FIELD_SIZES[f.type]
 
             buf_out += struct.pack(">IIHBB", f.hash, f.mask, f.offset, f.shift, f.type)
 
+        # Align entry length to 4 bytes
         len_data_entry = (len_data_entry + 1) & ~3
 
         # Write header and calculate data offset
@@ -176,10 +180,12 @@ class Bcsv:
                     else:
                         off = len(buf_strings)
                         string_offsets[val] = off
-                        buf_strings += pack_sjis_string(val)
+                        buf_strings += pack_sjis(val)
                     buf_out += struct.pack(">i", off)
 
-        # Join output with strings and align to 32 bytes
+            buf_out += align4(buf_out)
+
+        # Join output and string pool and align it to 32 bytes
         buf_out += buf_strings
         buf_out += align32(buf_out, "@")
         return buf_out

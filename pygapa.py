@@ -585,7 +585,6 @@ class PygapaEditor(QMainWindow):
 
         # Populate effect data for currently selected item
         self.textParticleName.setText(self.current_particle.name)
-        self.spnParticleUnk6.setValue(self.current_particle.unk6)
         self.textParticleTextures.setPlainText("\n".join(self.current_particle.texture_names))
 
         # Release blocked signals

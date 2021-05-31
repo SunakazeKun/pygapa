@@ -206,7 +206,6 @@ class JPAResource:
         self.texture_names = list()  # List of texture file names, will be populated later on
 
         self.index = 0               # The particles index inside the container
-        self.unk6 = 0                # Unknown as of now, may be two separate bytes
         self.total_size = 0          # Total size in bytes, set when (un)packing
 
     def unpack(self, buffer, offset: int = 0):
@@ -224,7 +223,7 @@ class JPAResource:
         self.total_size = 8  # In SMG, the first 8 bytes are the header for JPAResource
 
         # Parse header
-        self.index, num_sections, num_field_blocks, num_key_blocks, self.unk6 = struct.unpack_from(">2h2Bh", buffer, offset)
+        self.index, num_sections, num_field_blocks, num_key_blocks, num_textures = struct.unpack_from(">2h3B", buffer, offset)
         offset += self.total_size
 
         # Go through all available sections
@@ -266,20 +265,8 @@ class JPAResource:
                 self.ex_tex_shape.unpack(buffer, offset)
             # Parse texture ID database
             elif magic == "TDB1":
-                num_texture_ids = (size - 8) // 2
-
-                # Since TDB1 is always aligned to 4 bytes, we have to drop invalid IDs. Therefore, we only accept IDs of
-                # 0 if it is the first texture ID entry.
-                zero_found = False
-                for j in range(num_texture_ids):
-                    texture_id = get_s16(block, 0x8 + j * 0x2)
-
-                    if texture_id == 0:
-                        if zero_found:
-                            break  # overflow into padding
-                        zero_found = True
-
-                    self.texture_ids.append(texture_id)
+                for j in range(num_textures):
+                    self.texture_ids.append(get_s16(block, 0x8 + j * 0x2))
             # Just to be sure we find a wrong section
             else:
                 raise Exception(f"Unknown section {magic}")
@@ -301,7 +288,6 @@ class JPAResource:
         self.texture_names = entry["textures"]
 
         self.index = -1
-        self.unk6 = entry["unk6"]
         self.total_size = 0
 
         if "dynamicsBlock" in entry:
@@ -334,12 +320,11 @@ class JPAResource:
         # Pack header
         num_field_blocks = len(self.field_blocks)
         num_key_blocks = len(self.key_blocks)
-        out_buf = bytearray() + struct.pack(">2h2Bh", self.index, 0, num_field_blocks, num_key_blocks, self.unk6)
+        num_textures = len(self.texture_ids)
+        out_buf = bytearray() + struct.pack(">2h4B", self.index, 0, num_field_blocks, num_key_blocks, num_textures, 0)
 
         # Pack blocks
-        num_sections = 0
-        if len(self.texture_ids) > 0:
-            num_sections += 1
+        num_sections = 1
 
         if self.dynamics_block:
             out_buf += self.dynamics_block.pack()
@@ -371,12 +356,11 @@ class JPAResource:
         # Pack texture ID database
         out_tdb1 = bytearray()
 
-        if len(self.texture_ids) > 0:
-            for texture_id in self.texture_ids:
-                out_tdb1 += pack_s16(texture_id)
-            out_tdb1 += align4(out_tdb1, "\0")
+        for texture_id in self.texture_ids:
+            out_tdb1 += pack_s16(texture_id)
+        out_tdb1 += align4(out_tdb1, "\0")
 
-            out_tdb1 = "TDB1".encode("ascii") + pack_s32(len(out_tdb1) + 8) + out_tdb1
+        out_tdb1 = "TDB1".encode("ascii") + pack_s32(len(out_tdb1) + 8) + out_tdb1
 
         # Assemble output
         out_buf += out_tdb1
@@ -385,9 +369,7 @@ class JPAResource:
         return out_buf
 
     def pack_json(self) -> dict:
-        entry = {
-            "unk6": self.unk6
-        }
+        entry = dict()
 
         # Pack blocks
         if self.dynamics_block:
@@ -422,7 +404,6 @@ class JPAResource:
         self.key_blocks.clear()
         self.texture_names.clear()
         self.texture_names += other.texture_names
-        self.unk6 = other.unk6
 
         self.dynamics_block = deepcopy(other.dynamics_block)
 

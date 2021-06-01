@@ -218,3 +218,9 @@ def align16(buffer, pad_chr="\0"):
 def align32(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 32 bytes."""
     return __align(buffer, 32, pad_chr)
+
+
+# Bit functions
+
+def test_bit(val: int, flag: int) -> bool:
+    return (val >> flag) & 1 == 1

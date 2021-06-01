@@ -1,8 +1,29 @@
+from enum import IntEnum
+
 from formats.helper import *
 
 
-def decompress(buf) -> bytearray:
-    if get_magic4(buf) != "Yaz0":
+class JKRCompressionType(IntEnum):
+    NONE = 0
+    YAZ0 = 1
+    YAY0 = 2
+    ASR = 3
+
+
+def decompress(buffer):
+    magic = get_magic4(buffer)
+
+    if magic == "Yaz0":
+        return decompress_yaz0(buffer, False)
+    elif magic == "Yay0":
+        return decompress_yay0(buffer, False)
+    elif magic == "ASR":
+        raise Exception("ASR compression is not supported")
+    return buffer
+
+
+def decompress_yaz0(buf, check: True):
+    if check and get_magic4(buf) != "Yaz0":
         return buf
 
     len_in = len(buf)
@@ -51,3 +72,7 @@ def decompress(buf) -> bytearray:
                 break
 
     return buf_out
+
+
+def decompress_yay0(buf, check: True):
+    raise Exception("Yay0 compression is not supported")

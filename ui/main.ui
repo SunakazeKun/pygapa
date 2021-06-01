@@ -763,6 +763,29 @@
            <locale language="English" country="UnitedStates"/>
           </property>
           <layout class="QGridLayout" name="gridLayout_7">
+           <item row="2" column="0">
+            <widget class="QScrollArea" name="scrollArea">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>400</height>
+              </size>
+             </property>
+             <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
+             <widget class="QWidget" name="scrollAreaWidgetContents">
+              <property name="geometry">
+               <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>537</width>
+                <height>398</height>
+               </rect>
+              </property>
+             </widget>
+            </widget>
+           </item>
            <item row="0" column="0">
             <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0,0" columnstretch="2,0">
              <property name="horizontalSpacing">
@@ -771,13 +794,23 @@
              <property name="verticalSpacing">
               <number>6</number>
              </property>
-             <item row="1" column="0" colspan="2">
-              <widget class="Line" name="line">
+             <item row="3" column="0">
+              <widget class="QLabel" name="labelParticleTextures">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
+               <property name="text">
+                <string>Textures</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="labelParticleName">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="text">
+                <string>Name</string>
                </property>
               </widget>
              </item>
@@ -828,33 +861,6 @@
                </property>
               </widget>
              </item>
-             <item row="3" column="0">
-              <widget class="QLabel" name="labelParticleTextures">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>Textures</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QLineEdit" name="textParticleName">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="labelParticleName">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="text">
-                <string>Name</string>
-               </property>
-              </widget>
-             </item>
              <item row="4" column="1">
               <widget class="QTreeWidget" name="treeParticleBlocks">
                <property name="locale">
@@ -873,6 +879,13 @@
                </column>
               </widget>
              </item>
+             <item row="3" column="1">
+              <widget class="QPlainTextEdit" name="textParticleTextures">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+              </widget>
+             </item>
              <item row="4" column="0">
               <widget class="QLabel" name="labelParticleBlocks">
                <property name="locale">
@@ -883,30 +896,31 @@
                </property>
               </widget>
              </item>
-             <item row="3" column="1">
-              <widget class="QPlainTextEdit" name="textParticleTextures">
+             <item row="1" column="0" colspan="2">
+              <widget class="Line" name="line">
+               <property name="locale">
+                <locale language="English" country="UnitedStates"/>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLineEdit" name="textParticleName">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
               </widget>
              </item>
-             <item row="5" column="0">
-              <spacer name="verticalSpacer_2">
-               <property name="locale">
-                <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="orientation">
-                <enum>Qt::Vertical</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>20</width>
-                 <height>40</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
             </layout>
+           </item>
+           <item row="1" column="0">
+            <widget class="Line" name="line_4">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>

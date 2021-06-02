@@ -1,5 +1,7 @@
+*.arc
 *.pyc
 /.idea
-/Effect
 /test
 /venv
+rarcyaz0test.py
+yaz0enc.exe

@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-from formats.compression import decompress, decompress_yaz0, decompress_yay0, JKRCompressionType
+from formats.compression import decompress, decompress_szs, decompress_szp, JKRCompressionType
 from formats.helper import *
 
 
@@ -303,9 +303,9 @@ class JKRArchive:
 
                     # Decompress file data if necessary
                     if compression_type == JKRCompressionType.YAZ0:
-                        buf_file_data = decompress_yaz0(buf_file_data, False)
+                        buf_file_data = decompress_szs(buf_file_data, False)
                     elif compression_type == JKRCompressionType.YAY0:
-                        buf_file_data = decompress_yay0(buf_file_data, False)
+                        buf_file_data = decompress_szp(buf_file_data, False)
 
                     # Test if the file is a REL file
                     is_rel = test_bit(flags, JKRFileAttr.IS_REL)

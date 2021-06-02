@@ -1,3 +1,4 @@
+import subprocess
 from enum import IntEnum
 
 from formats.helper import *
@@ -11,18 +12,21 @@ class JKRCompressionType(IntEnum):
 
 
 def decompress(buffer):
-    magic = get_magic4(buffer)
-
-    if magic == "Yaz0":
-        return decompress_yaz0(buffer, False)
-    elif magic == "Yay0":
-        return decompress_yay0(buffer, False)
-    elif magic == "ASR":
+    # Magic is "Ya_0"
+    if buffer[0] == 0x59 and buffer[1] == 0x61 and buffer[3] == 0x30:
+        # Yaz0
+        if buffer[2] == 0x7A:
+            return decompress_szs(buffer, False)
+        # Yay0
+        elif buffer[2] == 0x79:
+            return decompress_szp(buffer, False)
+    # Magic is "ASR"
+    elif buffer[0] == 0x41 and buffer[1] == 0x53 and buffer[2] == 0x52:
         raise Exception("ASR compression is not supported")
     return buffer
 
 
-def decompress_yaz0(buf, check: True):
+def decompress_szs(buf, check: True):
     if check and get_magic4(buf) != "Yaz0":
         return buf
 
@@ -34,10 +38,10 @@ def decompress_yaz0(buf, check: True):
     off_out = 0
 
     while off_out < len_out:
-        block = get_u8(buf, off_in)
+        block = buf[off_in]
         off_in += 1
 
-        for fi in range(8):
+        for _ in range(8):
             # Read plain byte
             if block & 0x80:
                 buf_out[off_out] = buf[off_in]
@@ -74,5 +78,21 @@ def decompress_yaz0(buf, check: True):
     return buf_out
 
 
-def decompress_yay0(buf, check: True):
-    raise Exception("Yay0 compression is not supported")
+def decompress_szp(buf, check: True):
+    raise Exception("SZP compression is not supported")
+
+
+def try_compress_szs_external(file_path: str, buffer):
+    if file_path.find("/") != -1:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    try:
+        write_file(file_path, buffer)
+
+        subprocess.run(["yaz0enc", file_path])
+
+        os.remove(file_path)
+        os.rename(file_path + ".yaz0", file_path)
+    except subprocess.CalledProcessError:
+        print("Couldn't compress the file. Does yaz0enc exist?")
+

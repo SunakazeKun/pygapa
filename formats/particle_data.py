@@ -329,13 +329,10 @@ class ParticleData:
         effects_data = read_file(effects_file)
         self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
-    def unpack_rarc(self, rarc_file: str):
-        effect_arc = rarc.JKRArchive()
-        effect_arc.unpack(read_file(rarc_file))
-
-        jpc_data = effect_arc.find_file("Effect/Particles.jpc").get_data()
-        names_data = effect_arc.find_file("Effect/ParticleNames.bcsv").get_data()
-        effects_data = effect_arc.find_file("Effect/AutoEffectList.bcsv").get_data()
+    def unpack_rarc(self, directory: rarc.JKRDirEntry):
+        jpc_data = directory.find_file("Particles.jpc").get_data()
+        names_data = directory.find_file("ParticleNames.bcsv").get_data()
+        effects_data = directory.find_file("AutoEffectList.bcsv").get_data()
         self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
     def pack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
@@ -374,14 +371,9 @@ class ParticleData:
         # Write AutoEffectList entries
         write_json_file(effects_json_file, out_effects_json)
 
-    def pack_bin(self, jpc_file: str, names_file: str, effects_file: str):
+    def __pack_bin(self):
         particle_container = jpac210.JParticlesContainer()
         particle_container.textures = self.textures
-
-        # Create folders if necessary
-        os.makedirs(os.path.dirname(jpc_file), exist_ok=True)
-        os.makedirs(os.path.dirname(names_file), exist_ok=True)
-        os.makedirs(os.path.dirname(effects_file), exist_ok=True)
 
         # Pack particles and names
         particle_names = bcsv.Bcsv()
@@ -424,12 +416,59 @@ class ParticleData:
 
         effects_data.entries = [effect.pack() for effect in self.effects]
 
-        # Write all the files
-        print("Write JPC file...")
-        write_file(jpc_file, particle_container.pack())
+        # Pack all data
+        print("Pack JPC data...")
+        self.__tmp_packed_particle_container = particle_container.pack()
 
-        print("Write names BCSV...")
-        write_file(names_file, particle_names.pack())
+        print("Pack names BCSV...")
+        self.__tmp_packed_particle_names = particle_names.pack()
 
         print("Write effects BCSV...")
-        write_file(effects_file, effects_data.pack("GroupName"))
+        self.__tmp_packed_effects_data = effects_data.pack("GroupName")
+
+    def pack_bin(self, jpc_file: str, names_file: str, effects_file: str):
+        self.__pack_bin()
+
+        # Create folders if necessary
+        os.makedirs(os.path.dirname(jpc_file), exist_ok=True)
+        os.makedirs(os.path.dirname(names_file), exist_ok=True)
+        os.makedirs(os.path.dirname(effects_file), exist_ok=True)
+
+        # Write all the files
+        write_file(jpc_file, self.__tmp_packed_particle_container)
+        write_file(names_file, self.__tmp_packed_particle_names)
+        write_file(effects_file, self.__tmp_packed_effects_data)
+
+        # Release buffered data
+        del self.__tmp_packed_particle_container
+        del self.__tmp_packed_particle_names
+        del self.__tmp_packed_effects_data
+
+    def pack_rarc(self, directory: rarc.JKRDirEntry):
+        self.__pack_bin()
+
+        # Get files from RARC folder if existent
+        particle_container_file = directory.find_file("Particles.jpc")
+        particle_names_file = directory.find_file("ParticleNames.bcsv")
+        effects_data_file = directory.find_file("AutoEffectList.bcsv")
+
+        # Try to create non-existent files if necessary
+        if particle_container_file is None:
+            particle_container_file = rarc.JKRFileEntry("Particles.jpc")
+            directory.add_file(particle_container_file)
+        if particle_names_file is None:
+            particle_names_file = rarc.JKRFileEntry("ParticleNames.bcsv")
+            directory.add_file(particle_names_file)
+        if effects_data_file is None:
+            effects_data_file = rarc.JKRFileEntry("AutoEffectList.bcsv")
+            directory.add_file(effects_data_file)
+
+        particle_container_file.set_data(self.__tmp_packed_particle_container)
+        particle_names_file.set_data(self.__tmp_packed_particle_names)
+        effects_data_file.set_data(self.__tmp_packed_effects_data)
+
+        # Release buffered data
+        del self.__tmp_packed_particle_container
+        del self.__tmp_packed_particle_names
+        del self.__tmp_packed_effects_data
+

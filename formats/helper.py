@@ -10,11 +10,14 @@ def get_bool(buffer, offset: int = 0) -> bool:
 
 
 def get_u8(b, o: int) -> int:
-    return b[o] & 0xFF
+    return b[o]
 
 
 def get_s8(b, o: int) -> int:
-    return struct.unpack_from("b", b, o)[0]
+    val = b[o]
+    if val & 0x80:
+        val |= ~0xFF
+    return val
 
 
 def get_u16(b, o: int) -> int:
@@ -171,6 +174,9 @@ def read_file(file_path) -> bytearray:
 
 def write_file(file_path, buffer):
     """Writes the contents of a bytes-like object to the specified file."""
+    if buffer is None:
+        raise ValueError("Tried to write non-existent data to file.")
+
     with open(file_path, "wb") as f:
         f.write(buffer)
         f.flush()

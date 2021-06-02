@@ -5,7 +5,7 @@ from copy import deepcopy
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
-from formats import jpac210
+from formats import jpac210, rarc
 from formats.helper import *
 import formats.particle_data as particle_data
 
@@ -48,6 +48,7 @@ class PygapaEditor(QMainWindow):
 
         # Particle data holders
         self.particle_data = None
+        self.effect_arc = None
         self.particle_data_file = None
         self.current_effect = None
         self.copied_effect = None
@@ -132,8 +133,16 @@ class PygapaEditor(QMainWindow):
     # ---------------------------------------------------------------------------------------------
     # Particle data I/O
     # ---------------------------------------------------------------------------------------------
+    def select_open_particle_data_file(self) -> str:
+        filters = "ARC files (*.arc);;RARC files (*.rarc)"
+        return QFileDialog.getOpenFileName(self, "Load particle data from...", filter=filters)[0]
+
+    def select_save_particle_data_file(self) -> str:
+        filters = "ARC files (*.arc);;RARC files (*.rarc)"
+        return QFileDialog.getSaveFileName(self, "Save particle data to...", filter=filters)[0]
+
     def open_particle_data(self):
-        particle_file_name = QFileDialog.getOpenFileName(self, "Select Effect.arc", filter="ARC files (*.arc)")[0]
+        particle_file_name = self.select_open_particle_data_file()
 
         if len(particle_file_name) == 0:
             return
@@ -148,7 +157,10 @@ class PygapaEditor(QMainWindow):
 
         # Try to unpack particle data
         try:
-            self.particle_data.unpack_rarc(self.particle_data_file)
+            self.effect_arc = rarc.JKRArchive()
+            self.effect_arc.unpack(read_file(self.particle_data_file))
+
+            self.particle_data.unpack_rarc(self.effect_arc.get_root())
         except Exception:  # Will be handled better in the future, smh
             self.status("An error occured while loading particle data.", True)
             return
@@ -173,34 +185,33 @@ class PygapaEditor(QMainWindow):
             return
 
         if self.particle_data_file is None:
-            particle_folder_name = QFileDialog.getSaveFileName(self, "Select particle data folder", filter="ARC files (*.arc)")[0]
+            particle_folder_name = self.select_save_particle_data_file()
             if len(particle_folder_name) == 0:
                 return
 
             self.particle_data_file = particle_folder_name
-        self.save_particle_data_to_folder()
+        self.save_particle_data_to_file()
 
     def save_as_particle_data(self):
         if self.particle_data is None or self.contains_errors():
             return
 
-        particle_folder_name = QFileDialog.getSaveFileName(self, "Select particle data folder", filter="ARC files (*.arc)")[0]
+        particle_folder_name = self.select_save_particle_data_file()
         if len(particle_folder_name) == 0:
             return
 
         self.particle_data_file = particle_folder_name
-        self.save_particle_data_to_folder()
+        self.save_particle_data_to_file()
 
-    def save_particle_data_to_folder(self):
-        # Get output file paths
-        #fp_out_particles = os.path.join(self.particle_data_file, "Particles.jpc")
-        #fp_out_particle_names = os.path.join(self.particle_data_file, "ParticleNames.bcsv")
-        #fp_out_effects = os.path.join(self.particle_data_file, "AutoEffectList.bcsv")
+    def save_particle_data_to_file(self):
+        # Pack particle data into RARC folder
+        self.particle_data.pack_rarc(self.effect_arc.get_root())
 
-        # Output packed data to JPC and BCSV files
-        #self.particle_data.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
+        # Pack Effect.arc and write to output file.
+        packed_arc = self.effect_arc.pack()
+        #write_file(self.particle_data_file, packed_arc)
 
-        #self.status(f"Saved particle data to \"{self.particle_data_file}\".")
+        self.status(f"Saved particle data to \"{self.particle_data_file}\".")
         pass
 
     def contains_errors(self):

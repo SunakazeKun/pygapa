@@ -2,6 +2,7 @@ import os
 
 import formats.bcsv as bcsv
 import formats.jpac210 as jpac210
+from formats import rarc
 from formats.helper import *
 
 DRAW_ORDERS = [
@@ -285,24 +286,24 @@ class ParticleData:
             self.effects.append(effect)
             index += 1
 
-    def unpack_bin(self, jpc_file: str, names_file: str, effects_file: str):
+    def __unpack_bin_files(self, jpc_data, names_data, effects_data):
         # Load JPAResource and JPATexture entries
         print("Load JPC file ...")
         particle_container = jpac210.JParticlesContainer()
-        particle_container.unpack(read_file(jpc_file))
+        particle_container.unpack(jpc_data)
         self.textures = particle_container.textures
         self.particles.clear()
 
         # Load ParticleNames entries
         print("Load names BCSV ...")
         particle_names = bcsv.Bcsv()
-        particle_names.unpack(read_file(names_file))
+        particle_names.unpack(names_data)
         particle_names = particle_names.entries
 
         # Load AutoEffectList entries
         print("Load effects BCSV ...")
         auto_effects = bcsv.Bcsv()
-        auto_effects.unpack(read_file(effects_file))
+        auto_effects.unpack(effects_data)
         self.effects.clear()
 
         for effect_entry in auto_effects.entries:
@@ -321,6 +322,21 @@ class ParticleData:
             particle.name = particle_name
 
             self.particles.append(particle)
+
+    def unpack_bin(self, jpc_file: str, names_file: str, effects_file: str):
+        jpc_data = read_file(jpc_file)
+        names_data = read_file(names_file)
+        effects_data = read_file(effects_file)
+        self.__unpack_bin_files(jpc_data, names_data, effects_data)
+
+    def unpack_rarc(self, rarc_file: str):
+        effect_arc = rarc.JKRArchive()
+        effect_arc.unpack(read_file(rarc_file))
+
+        jpc_data = effect_arc.find_file("Effect/Particles.jpc").get_data()
+        names_data = effect_arc.find_file("Effect/ParticleNames.bcsv").get_data()
+        effects_data = effect_arc.find_file("Effect/AutoEffectList.bcsv").get_data()
+        self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
     def pack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
         # Create JSON data that declares which particles and textures belong to this container

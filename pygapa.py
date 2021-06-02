@@ -12,7 +12,7 @@ import formats.particle_data as particle_data
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.3"
+APP_VERSION = "v0.4"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -48,7 +48,7 @@ class PygapaEditor(QMainWindow):
 
         # Particle data holders
         self.particle_data = None
-        self.particle_data_folder = None
+        self.particle_data_file = None
         self.current_effect = None
         self.copied_effect = None
         self.current_particle = None
@@ -133,27 +133,22 @@ class PygapaEditor(QMainWindow):
     # Particle data I/O
     # ---------------------------------------------------------------------------------------------
     def open_particle_data(self):
-        particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
+        particle_file_name = QFileDialog.getOpenFileName(self, "Select Effect.arc", filter="ARC files (*.arc)")[0]
 
-        if len(particle_folder_name) == 0:
+        if len(particle_file_name) == 0:
             return
 
         self.reset_editor()
 
         self.particle_data = particle_data.ParticleData()
-        self.particle_data_folder = particle_folder_name
+        self.particle_data_file = particle_file_name
         self.current_effect = None
         self.current_particle = None
         self.current_texture = None
 
-        # Get input file paths
-        fp_particles = os.path.join(self.particle_data_folder, "Particles.jpc")
-        fp_particle_names = os.path.join(self.particle_data_folder, "ParticleNames.bcsv")
-        fp_effects = os.path.join(self.particle_data_folder, "AutoEffectList.bcsv")
-
         # Try to unpack particle data
         try:
-            self.particle_data.unpack_bin(fp_particles, fp_particle_names, fp_effects)
+            self.particle_data.unpack_rarc(self.particle_data_file)
         except Exception:  # Will be handled better in the future, smh
             self.status("An error occured while loading particle data.", True)
             return
@@ -171,41 +166,42 @@ class PygapaEditor(QMainWindow):
         self.enable_all_components(True)
         self.widgetEffects.setEnabled(False)
 
-        self.status(f"Successfully loaded particle data from \"{self.particle_data_folder}\".")
+        self.status(f"Successfully loaded particle data from \"{self.particle_data_file}\".")
 
     def save_particle_data(self):
         if self.particle_data is None or self.contains_errors():
             return
 
-        if self.particle_data_folder is None:
-            particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
+        if self.particle_data_file is None:
+            particle_folder_name = QFileDialog.getSaveFileName(self, "Select particle data folder", filter="ARC files (*.arc)")[0]
             if len(particle_folder_name) == 0:
                 return
 
-            self.particle_data_folder = particle_folder_name
+            self.particle_data_file = particle_folder_name
         self.save_particle_data_to_folder()
 
     def save_as_particle_data(self):
         if self.particle_data is None or self.contains_errors():
             return
 
-        particle_folder_name = QFileDialog.getExistingDirectory(self, "Select particle data folder")
+        particle_folder_name = QFileDialog.getSaveFileName(self, "Select particle data folder", filter="ARC files (*.arc)")[0]
         if len(particle_folder_name) == 0:
             return
 
-        self.particle_data_folder = particle_folder_name
+        self.particle_data_file = particle_folder_name
         self.save_particle_data_to_folder()
 
     def save_particle_data_to_folder(self):
         # Get output file paths
-        fp_out_particles = os.path.join(self.particle_data_folder, "Particles.jpc")
-        fp_out_particle_names = os.path.join(self.particle_data_folder, "ParticleNames.bcsv")
-        fp_out_effects = os.path.join(self.particle_data_folder, "AutoEffectList.bcsv")
+        #fp_out_particles = os.path.join(self.particle_data_file, "Particles.jpc")
+        #fp_out_particle_names = os.path.join(self.particle_data_file, "ParticleNames.bcsv")
+        #fp_out_effects = os.path.join(self.particle_data_file, "AutoEffectList.bcsv")
 
         # Output packed data to JPC and BCSV files
-        self.particle_data.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
+        #self.particle_data.pack_bin(fp_out_particles, fp_out_particle_names, fp_out_effects)
 
-        self.status(f"Saved particle data to \"{self.particle_data_folder}\".")
+        #self.status(f"Saved particle data to \"{self.particle_data_file}\".")
+        pass
 
     def contains_errors(self):
         # todo: improve this, duh

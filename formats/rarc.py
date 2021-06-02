@@ -5,32 +5,37 @@ from formats.helper import *
 
 
 class JKRFileAttr(IntEnum):
-    NORMAL = 0
+    FILE = 0
     DIRECTORY = 1
     COMPRESSED = 2
-    COMPRESSION_TYPE = 7
+    UNK_ATTR_3 = 3
+    IS_DATA = 4
+    IS_REL = 5
+    UNK_ATTR_6 = 6
+    USE_YAZ0 = 7
 
 
 class JKRDirEntry:
     def __init__(self, name: str):
-        self.name = name
+        self.__name = name
         self.sub_folders = list()
         self.sub_files = list()
 
     def __str__(self):
-        return self.name
+        return self.__name
 
     def __len__(self):
         return len(self.sub_folders) + len(self.sub_files)
 
     def set_name(self, name: str):
-        self.name = name.strip("/")
+        self.__name = name.strip("/")
 
     def find_folder(self, file_path: str, fix_file_path=True):
         # Function to find direct child folder
         def find_child(child_name: str):
+            child_name = child_name.lower()
             for folder in self.sub_folders:
-                if child_name == folder.name.lower():
+                if child_name == str(folder).lower():
                     return folder
             return None
 
@@ -56,7 +61,7 @@ class JKRDirEntry:
         def find_child(child_name: str):
             child_name = child_name.lower()
             for file in self.sub_files:
-                if child_name == file.name.lower():
+                if child_name == str(file).lower():
                     return file
             return None
 
@@ -77,44 +82,137 @@ class JKRDirEntry:
 
         return None
 
+    def add_file(self, file) -> bool:
+        lower_file = str(file).lower()
+        for sub_file in self.sub_files:
+            if str(sub_file).lower() == lower_file:
+                return False
+
+        self.sub_files.append(file)
+        return True
+
+    def add_folder(self, folder) -> bool:
+        lower_folder = str(folder).lower()
+        for sub_folder in self.sub_folders:
+            if str(sub_folder).lower() == lower_folder:
+                return False
+
+        self.sub_folders.append(folder)
+        return True
+
+    def remove_folder(self, folder_name: str):
+        folder_name = folder_name.lower()
+        index = -1
+        i = 0
+
+        for folder in self.sub_folders:
+            if str(folder).lower() == folder_name:
+                index = i
+                break
+            i += 1
+
+        if index > -1:
+            folder = self.sub_folders[index]
+            self.sub_folders.pop(index)
+            return folder
+
+        return None
+
+    def remove_file(self, file_name: str):
+        file_name = file_name.lower()
+        index = -1
+        i = 0
+
+        for file in self.sub_files:
+            if str(file).lower() == file_name:
+                index = i
+                break
+            i += 1
+
+        if index > -1:
+            file = self.sub_files[index]
+            self.sub_files.pop(index)
+            return file
+
+        return None
+
 
 class JKRFileEntry:
-    def __init__(self, name: str):
-        self.name = name
-        self.data = None
-        self.compression = JKRCompressionType.NONE
+    def __init__(self, name: str, data=None, compression: int = JKRCompressionType.NONE, is_rel: bool = False):
+        self.__name = name
+        self.__data = data
+        self.set_compression(compression)
+        self.is_rel = is_rel
 
     def __str__(self):
-        return self.name
+        return self.__name
 
     def __len__(self):
-        if self.data:
-            return len(self.data)
+        if self.__data:
+            return len(self.__data)
         return 0
 
     def set_name(self, name: str):
-        self.name = name.strip("/")
+        self.__name = name.strip("/")
 
     def get_data(self):
-        return self.data
+        return self.__data
 
     def set_data(self, data):
-        self.data = data
+        self.__data = data
+
+    def set_compression(self, compression: int):
+        if compression < JKRCompressionType.NONE or compression >= JKRCompressionType.ASR:
+            compression = JKRCompressionType.NONE
+        self.__compression = compression
+
+    def get_compression(self):
+        return self.__compression
 
 
 class JKRArchive:
     def __init__(self, root: str = "root"):
-        self.root = JKRDirEntry(root)
+        self.__root = JKRDirEntry(root)
+
+    def __str__(self):
+        """
+        This prints the entire file structure contained in this archive. This should only be used for debugging and
+        testing purposes.
+        """
+        if self.__root is None:
+            print("None")
+
+        result = ""
+        is_continuous = False
+
+        def print_dir(folder, indent):
+            nonlocal result, is_continuous
+            if is_continuous:
+                result += "\n"
+            is_continuous = True
+
+            spaces = " " * indent
+            result += spaces + str(folder)
+
+            for sub_folder in folder.sub_folders:
+                print_dir(sub_folder, indent + 1)
+
+            for sub_file in folder.sub_files:
+                result += "\n " + spaces + str(sub_file)
+
+        print_dir(self.__root, 0)
+
+        return result
 
     def unpack(self, buffer):
-        self.root = None
+        self.__root = None
 
-        # In SMG1/2, and possibly other games, RARC files are usually compressed. We have to decompress our buffer first
-        # before we can start parsing the archive data.
+        # In SMG1/2, and possibly other games, RARC files are usually compressed. We have to try decompressing our
+        # buffer before we can start parsing the actual archive data.
         buffer = decompress(buffer)
 
         # Parse header
-        if get_magic4(buffer, 0x0) != "RARC":
+        if get_magic4(buffer) != "RARC":
             raise Exception("Fatal! No RARC data provided.")
 
         # The header consists of many more values than we are using here. There is no need to parse the remaining values
@@ -133,8 +231,8 @@ class JKRArchive:
         off_data = off_info + len_info
         off_nodes += off_info
 
-        nodes = list()
-        sub_nodes = dict()
+        all_nodes = list()  # List of all directory nodes
+        sub_nodes = dict()  # Stores subdirectory node IDs for each directory
 
         # Parse all directory nodes
         off_node = off_nodes
@@ -149,7 +247,7 @@ class JKRArchive:
             # Read the current node's name, create and append a directory entry for the node
             dir_name = read_ascii(buffer, off_name)
             dir_entry = JKRDirEntry(dir_name)
-            nodes.append(dir_entry)
+            all_nodes.append(dir_entry)
 
             # Store the sub directory nodes of the current nodes. These will be used to assign the proper subdirectories
             # for all the nodes at the end.
@@ -157,8 +255,8 @@ class JKRArchive:
             sub_nodes[dir_entry] = sub_nodes_for_dir
 
             # The very first node is always the root node of the archive
-            if self.root is None:
-                self.root = dir_entry
+            if self.__root is None:
+                self.__root = dir_entry
 
             # Calculate the starting offset of the file entries for the current directory node
             off_file = off_files + (idx_files_start * 0x14)
@@ -189,10 +287,10 @@ class JKRArchive:
                 if test_bit(flags, JKRFileAttr.DIRECTORY):
                     sub_nodes_for_dir.append(off_file_data)
                 # File entry
-                else:
+                elif test_bit(flags, JKRFileAttr.FILE):
                     # Is file data compressed? If so, determine the compression type (YAZ0 or YAY0)
                     if test_bit(flags, JKRFileAttr.COMPRESSED):
-                        if test_bit(flags, JKRFileAttr.COMPRESSION_TYPE):
+                        if test_bit(flags, JKRFileAttr.USE_YAZ0):
                             compression_type = JKRCompressionType.YAZ0
                         else:
                             compression_type = JKRCompressionType.YAY0
@@ -209,12 +307,15 @@ class JKRArchive:
                     elif compression_type == JKRCompressionType.YAY0:
                         buf_file_data = decompress_yay0(buf_file_data, False)
 
+                    # Test if the file is a REL file
+                    is_rel = test_bit(flags, JKRFileAttr.IS_REL)
+
                     # Create and append file entry
-                    file_entry = JKRFileEntry(file_name)
-                    file_entry.data = buf_file_data
-                    file_entry.compression = compression_type
+                    file_entry = JKRFileEntry(file_name, buf_file_data, compression_type, is_rel)
 
                     dir_entry.sub_files.append(file_entry)
+                else:
+                    raise Exception(f"Fatal! Unknown file entry {file_name} with attributes {flags} found.")
 
             off_node += 0x10
 
@@ -222,7 +323,55 @@ class JKRArchive:
         # better approach to this problem.
         for parent_dir, sub_nodes_for_dir in sub_nodes.items():
             for sub_node in sub_nodes_for_dir:
-                parent_dir.sub_folders.append(nodes[sub_node])
+                parent_dir.sub_folders.append(all_nodes[sub_node])
 
     def pack(self):
         pass
+
+    def get_root(self) -> JKRDirEntry:
+        return self.__root
+
+    def set_root(self, new_root: JKRDirEntry):
+        self.__root = new_root
+
+    @staticmethod
+    def path_without_root(file_path: str) -> str:
+        file_path = file_path.strip("/")
+        if file_path.find("/") != -1:
+            _, file_path = file_path.split("/", 1)
+        return file_path
+
+    def find_folder(self, folder_path: str) -> JKRDirEntry:
+        return self.__root.find_folder(self.path_without_root(folder_path), False)
+
+    def find_file(self, file_path: str) -> JKRFileEntry:
+        return self.__root.find_file(self.path_without_root(file_path), False)
+
+    def add_folder(self, folder_path: str, directory: JKRDirEntry) -> bool:
+        folder = self.find_folder(folder_path)
+        if folder is None:
+            return False
+        return folder.add_folder(directory)
+
+    def add_file(self, folder_path: str, file: JKRFileEntry) -> bool:
+        folder = self.find_folder(folder_path)
+        if folder is None:
+            return False
+        return folder.add_file(file)
+
+    def remove_folder(self, folder_path: str) -> JKRDirEntry:
+        raise Exception("Operation not supported yet.")
+
+    def remove_file(self, file_path: str) -> JKRFileEntry:
+        file_path = self.path_without_root(file_path)
+        folder = self.__root
+
+        if file_path.rfind("/") != -1:
+            folder_path, file_name = file_path.rsplit("/", 1)
+            folder = self.__root.find_folder(folder_path)
+            file_path = file_name
+
+        if folder is None:
+            return None
+
+        return folder.remove_file(file_path)

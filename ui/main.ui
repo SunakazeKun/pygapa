@@ -199,6 +199,9 @@
                 <locale language="English" country="UnitedStates"/>
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_2">
+                <property name="spacing">
+                 <number>6</number>
+                </property>
                 <property name="leftMargin">
                  <number>0</number>
                 </property>
@@ -779,7 +782,7 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>537</width>
+                <width>98</width>
                 <height>398</height>
                </rect>
               </property>
@@ -787,7 +790,7 @@
             </widget>
            </item>
            <item row="0" column="0">
-            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0,0" columnstretch="2,0">
+            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0" columnstretch="2,0">
              <property name="horizontalSpacing">
               <number>24</number>
              </property>

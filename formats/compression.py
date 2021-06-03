@@ -1,4 +1,5 @@
 import subprocess
+import platform
 from enum import IntEnum
 
 from formats.helper import *
@@ -26,7 +27,7 @@ def decompress(buffer):
     return buffer
 
 
-def decompress_szs(buf, check: True):
+def decompress_szs(buf, check: bool = True):
     if check and get_magic4(buf) != "Yaz0":
         return buf
 
@@ -78,21 +79,33 @@ def decompress_szs(buf, check: True):
     return buf_out
 
 
-def decompress_szp(buf, check: True):
+def decompress_szp(buf, check: bool = True):
     raise Exception("SZP compression is not supported")
 
 
-def try_compress_szs_external(file_path: str, buffer):
+def try_compress_szs_external(file_path: str, buffer) -> bool:
     if file_path.find("/") != -1:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
+    write_file(file_path, buffer)
+
+    # Try to compress with WSZST if Wiimms SZS tools is found
     try:
-        write_file(file_path, buffer)
-
-        subprocess.run(["yaz0enc", file_path])
-
-        os.remove(file_path)
-        os.rename(file_path + ".yaz0", file_path)
+        subprocess.run(["wszst", "compress", file_path, "--compr", str(10)])
+        return True
     except subprocess.CalledProcessError:
-        print("Couldn't compress the file. Does yaz0enc exist?")
+        print("Couldn't compress the file. Does wszst exist?")
+
+    # Try to compress with yaz0enc if WSZST failed and if running on a Windows OS
+    if platform.system() == "Windows" and os.path.exists("yaz0enc.exe"):
+        try:
+            subprocess.run(["yaz0enc", file_path])
+
+            os.remove(file_path)
+            os.rename(file_path + ".yaz0", file_path)
+            return True
+        except subprocess.CalledProcessError:
+            print("Couldn't compress the file. Does yaz0enc exist?")
+
+    return False
 

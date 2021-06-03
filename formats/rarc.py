@@ -1,18 +1,16 @@
-from enum import IntEnum
+from enum import IntFlag
 
 from formats.compression import decompress, decompress_szs, decompress_szp, JKRCompressionType
 from formats.helper import *
 
 
-class JKRFileAttr(IntEnum):
-    FILE = 0
-    DIRECTORY = 1
-    COMPRESSED = 2
-    UNK_ATTR_3 = 3
-    IS_DATA = 4
-    IS_REL = 5
-    UNK_ATTR_6 = 6
-    USE_YAZ0 = 7
+class JKRFileAttr(IntFlag):
+    FILE = 1
+    DIRECTORY = 2
+    COMPRESSED = 4
+    IS_DATA = 16
+    IS_REL = 32
+    USE_YAZ0 = 128
 
 
 class JKRDirEntry:
@@ -284,13 +282,13 @@ class JKRArchive:
                     continue
 
                 # Directory entry
-                if test_bit(flags, JKRFileAttr.DIRECTORY):
+                if flags & JKRFileAttr.DIRECTORY:
                     sub_nodes_for_dir.append(off_file_data)
                 # File entry
-                elif test_bit(flags, JKRFileAttr.FILE):
+                elif flags & JKRFileAttr.FILE:
                     # Is file data compressed? If so, determine the compression type (YAZ0 or YAY0)
-                    if test_bit(flags, JKRFileAttr.COMPRESSED):
-                        if test_bit(flags, JKRFileAttr.USE_YAZ0):
+                    if flags & JKRFileAttr.COMPRESSED:
+                        if flags & JKRFileAttr.USE_YAZ0:
                             compression_type = JKRCompressionType.YAZ0
                         else:
                             compression_type = JKRCompressionType.YAY0
@@ -325,8 +323,153 @@ class JKRArchive:
             for sub_node in sub_nodes_for_dir:
                 parent_dir.sub_folders.append(all_nodes[sub_node])
 
+    @staticmethod
+    def __file_name_to_hash(file_name: str) -> int:
+        file_hash = 0
+        for ch in file_name.encode("ascii"):
+            file_hash *= 3
+            file_hash += ch
+        return file_hash & 0xFFFF
+
+    @staticmethod
+    def __dir_identifier(dir_name: str, is_first: bool) -> int:
+        # Root node uses "ROOT" as identifier
+        if is_first:
+            return 0x524F4F54
+
+        enc_upper = dir_name.upper().encode("ascii")
+        len_enc_name = len(enc_upper)
+
+        identifier = 0
+        for i in range(4):
+            identifier <<= 8
+            if i >= len_enc_name:
+                identifier += 0x20
+            else:
+                identifier += enc_upper[i]
+        return identifier
+
     def pack(self):
-        pass
+        out_buf = bytearray(64)
+
+        # Prepare output buffers and data
+        out_strings = bytearray()
+        out_data = bytearray()
+        string_offsets = dict()
+        num_nodes = 0
+        num_total_files = 0
+
+        # File entries with actual data are indexed, this stores the next index
+        cur_file_id = 0
+
+        def find_or_add_string(val: str) -> int:
+            nonlocal out_strings
+            if val in string_offsets:
+                off = string_offsets[val]
+            else:
+                off = len(out_strings)
+                string_offsets[val] = off
+                out_strings += pack_ascii(val)
+            return off
+
+        # These two directory names always appear first in the string table
+        find_or_add_string(".")
+        find_or_add_string("..")
+
+        def create_nodes(directory: JKRDirEntry):
+            nonlocal out_buf, num_total_files, num_nodes
+
+            dir_name = str(directory)
+            ind_node = self.__dir_identifier(dir_name, num_nodes == 0)
+            off_name = find_or_add_string(dir_name)
+            hash_name = self.__file_name_to_hash(dir_name)
+            num_files = len(directory) + 2  # 2 is for "." and ".."
+
+            # This stores the temporary ID for this node since we need it later on when creating the file entries.
+            directory.temp_id = num_nodes
+
+            # Write node data to buffer and update counters
+            out_buf += struct.pack(">2I2HI", ind_node, off_name, hash_name, num_files, num_total_files)
+            num_total_files += num_files
+            num_nodes += 1
+
+            # Create nodes for sub folders recursively
+            for folder in directory.sub_folders:
+                create_nodes(folder)
+
+        def create_files(directory: JKRDirEntry, parent_id: int):
+            nonlocal out_buf, out_data, num_total_files, cur_file_id
+
+            # Create folder entries
+            for folder in directory.sub_folders:
+                dir_name = str(folder)
+                off_name = find_or_add_string(dir_name)
+                hash_name = self.__file_name_to_hash(dir_name)
+                flags = (1 << (24 + JKRFileAttr.DIRECTORY)) | off_name
+
+                out_buf += struct.pack(">2H4I", 0xFFFF, hash_name, flags, folder.temp_id, 0x10, 0x0)
+
+            # Create file entries
+            for file in directory.sub_files:
+                dir_name = str(file)
+                off_name = find_or_add_string(dir_name)
+                hash_name = self.__file_name_to_hash(dir_name)
+
+                flags = JKRFileAttr.FILE
+                flags |= JKRFileAttr.IS_REL if file.is_rel else JKRFileAttr.IS_DATA
+
+                buf_file_data = file.get_data()
+
+                # todo: Compression of individual files? Although this is not used, the game supports this
+
+                flags_and_name = (flags << 24) | off_name
+                off_file_data = len(out_data)
+
+                out_data += buf_file_data
+
+                out_buf += struct.pack(">2H4I", cur_file_id, hash_name, flags_and_name, off_file_data, len(buf_file_data), 0x0)
+                cur_file_id += 1
+
+            node_id = directory.temp_id
+
+            # Create folder entries for "." and "..", these are constant except for their node index
+            out_buf += struct.pack(">2H4I", 0xFFFF, 0x002E, 0x02000000, node_id, 0x10, 0x0)
+            out_buf += struct.pack(">2H4I", 0xFFFF, 0x00B8, 0x02000002, parent_id, 0x10, 0x0)
+
+            # Create entries for all sub folders and their files
+            for folder in directory.sub_folders:
+                create_files(folder, node_id)
+
+            # Delete temporary ID since it is no longer required
+            del directory.temp_id
+
+        # Create nodes for all folders
+        create_nodes(self.__root)
+        out_buf += align32(out_buf)
+
+        # Create entries for all files
+        off_files = len(out_buf) - 0x20
+        create_files(self.__root, 0xFFFFFFFF)
+        out_buf += align32(out_buf)
+
+        # Join output with strings
+        off_strings = len(out_buf) - 0x20
+        out_buf += out_strings
+        out_buf += align32(out_buf)
+        del out_strings
+
+        # Join output with data
+        off_data = len(out_buf) - 0x20
+        len_strings = off_data - off_strings
+        out_buf += out_data
+        len_data = len(out_data)
+        del out_data
+
+        # Write header and information block data
+        struct.pack_into(">4s5I", out_buf, 0x0, pack_magic4("RARC"), len(out_buf), 0x20, off_data, len_data, len_data)
+        struct.pack_into(">6IHB", out_buf, 0x20, num_nodes, 0x20, num_total_files, off_files, len_strings, off_strings, num_total_files, 1)
+
+        return out_buf
 
     def get_root(self) -> JKRDirEntry:
         return self.__root

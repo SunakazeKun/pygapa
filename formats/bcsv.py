@@ -121,7 +121,7 @@ class Bcsv:
                     if val & (1 << 15) != 0:
                         val |= ~0xFFFF
                 elif f.type == FIELD_TYPE_U8:
-                    val = (get_u8(buffer, offset) & f.mask) >> f.shift
+                    val = (buffer[offset] & f.mask) >> f.shift
                 elif f.type == FIELD_TYPE_STRING:
                     off_string = off_strings + get_s32(buffer, offset)
                     val = read_sjis(buffer, off_string)
@@ -173,7 +173,7 @@ class Bcsv:
                 elif ffield.type == FIELD_TYPE_S16:
                     buf_out += pack_u16((val << ffield.shift) & ffield.mask)
                 elif ffield.type == FIELD_TYPE_U8:
-                    buf_out += pack_u8((val << ffield.shift) & ffield.mask)
+                    buf_out += (val << ffield.shift) & ffield.mask
                 elif ffield.type == FIELD_TYPE_STRING:
                     if val in string_offsets:
                         off = string_offsets[val]

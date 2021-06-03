@@ -1,18 +1,19 @@
 import argparse
 import sys
 from copy import deepcopy
+from enum import IntEnum
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
-from formats import jpac210, rarc
+from formats import jpac210, rarc, compression
 from formats.helper import *
 import formats.particle_data as particle_data
 
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.4"
+APP_VERSION = "v0.5"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -34,6 +35,12 @@ def exception_hook(exctype, value, traceback):
 
 
 sys.excepthook = exception_hook
+
+
+class StatusColor(IntEnum):
+    INFO = 0
+    WARN = 1
+    ERROR = 2
 
 
 class PygapaEditor(QMainWindow):
@@ -162,7 +169,7 @@ class PygapaEditor(QMainWindow):
 
             self.particle_data.unpack_rarc(self.effect_arc.get_root())
         except Exception:  # Will be handled better in the future, smh
-            self.status("An error occured while loading particle data.", True)
+            self.status("An error occured while loading particle data.", StatusColor.ERROR)
             return
 
         # Populate data
@@ -178,7 +185,7 @@ class PygapaEditor(QMainWindow):
         self.enable_all_components(True)
         self.widgetEffects.setEnabled(False)
 
-        self.status(f"Successfully loaded particle data from \"{self.particle_data_file}\".")
+        self.status(f"Successfully loaded particle data from \"{self.particle_data_file}\".", StatusColor.INFO)
 
     def save_particle_data(self):
         if self.particle_data is None or self.contains_errors():
@@ -207,12 +214,14 @@ class PygapaEditor(QMainWindow):
         # Pack particle data into RARC folder
         self.particle_data.pack_rarc(self.effect_arc.get_root())
 
-        # Pack Effect.arc and write to output file.
+        # Pack Effect.arc, try to compress the buffer and write to output file.
         packed_arc = self.effect_arc.pack()
-        #write_file(self.particle_data_file, packed_arc)
+        compressed = compression.try_compress_szs_external(self.particle_data_file, packed_arc)
 
-        self.status(f"Saved particle data to \"{self.particle_data_file}\".")
-        pass
+        if compressed:
+            self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
+        else:
+            self.status(f"Saved particle data to \"{self.particle_data_file}\". Compression failed.", StatusColor.WARN)
 
     def contains_errors(self):
         # todo: improve this, duh
@@ -263,8 +272,14 @@ class PygapaEditor(QMainWindow):
     # ---------------------------------------------------------------------------------------------
     # General UI helpers
     # ---------------------------------------------------------------------------------------------
-    def status(self, text: str, fail: bool = False, duration: int = 5000):
-        color = "red" if fail else "green"
+    def status(self, text: str, status: int, duration: int = 5000):
+        if status == StatusColor.INFO:
+            color = "green"
+        if status == StatusColor.WARN:
+            color = "orange"
+        if status == StatusColor.ERROR:
+            color = "red"
+
         self.statusBar.setStyleSheet(f"QStatusBar{{padding:8px;color:{color};}}")
         self.statusBar.showMessage(text, duration)
 
@@ -367,13 +382,13 @@ class PygapaEditor(QMainWindow):
         self.listEffects.clearSelection()
         self.listEffects.setCurrentRow(new_index)
 
-        self.status("Added new effect entry.")
+        self.status("Added new effect entry.", StatusColor.INFO)
 
     def delete_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
-            self.status("No effect(s) selected!", True)
+            self.status("No effect(s) selected!", StatusColor.ERROR)
             return
 
         # Get selected list indexes
@@ -387,13 +402,13 @@ class PygapaEditor(QMainWindow):
             self.listEffects.takeItem(delete_index)
             self.particle_data.effects.pop(delete_index)
 
-        self.status(f"Deleted {len(delete_indexes)} effect(s).")
+        self.status(f"Deleted {len(delete_indexes)} effect(s).", StatusColor.INFO)
 
     def clone_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
-            self.status("No effect(s) selected!", True)
+            self.status("No effect(s) selected!", StatusColor.ERROR)
             return
 
         # Get selected list indexes
@@ -415,27 +430,27 @@ class PygapaEditor(QMainWindow):
         self.listEffects.clearSelection()
         self.listEffects.setCurrentRow(new_index)
 
-        self.status(f"Cloned {len(clone_indexes)} effect(s).")
+        self.status(f"Cloned {len(clone_indexes)} effect(s).", StatusColor.INFO)
 
     def copy_effect(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
         if self.current_effect is None:
-            self.status("No effect selected!", True)
+            self.status("No effect selected!", StatusColor.ERROR)
             return
 
         self.copied_effect = deepcopy(self.particle_data.effects[self.listEffects.currentRow()])
 
-        self.status(f"Copied effect {self.copied_effect.description()}.")
+        self.status(f"Copied effect {self.copied_effect.description()}.", StatusColor.INFO)
 
     def replace_effect(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
         if self.current_effect is None:
-            self.status("No effect selected!", True)
+            self.status("No effect selected!", StatusColor.ERROR)
             return
         if self.copied_effect is None:
-            self.status("No effect copy available!", True)
+            self.status("No effect copy available!", StatusColor.ERROR)
             return
 
         # Replace current effect, we want to preserve references to current effect and its members
@@ -446,13 +461,13 @@ class PygapaEditor(QMainWindow):
         self.select_effect()
         self.update_current_effect_list_item()
 
-        self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}.")
+        self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}.", StatusColor.INFO)
 
     def export_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
-            self.status("No effect(s) selected!", True)
+            self.status("No effect(s) selected!", StatusColor.ERROR)
             return
 
         # Get file to export data to
@@ -474,7 +489,7 @@ class PygapaEditor(QMainWindow):
         # Write JSON file
         write_json_file(export_file, exported_effects)
 
-        self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".")
+        self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".", StatusColor.INFO)
 
     def import_effects(self):
         if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
@@ -506,7 +521,7 @@ class PygapaEditor(QMainWindow):
         self.listEffects.clearSelection()
         self.listEffects.setCurrentRow(new_index)
 
-        self.status(f"Imported {len(imported_effects)} effect(s) from \"{import_file}\".")
+        self.status(f"Imported {len(imported_effects)} effect(s) from \"{import_file}\".", StatusColor.INFO)
 
     def update_current_effect_list_item(self):
         self.listEffects.selectedItems()[0].setText(self.current_effect.description())
@@ -607,7 +622,7 @@ class PygapaEditor(QMainWindow):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
-            self.status("No particle(s) selected!", True)
+            self.status("No particle(s) selected!", StatusColor.ERROR)
             return
 
         # Get selected list indexes
@@ -621,13 +636,13 @@ class PygapaEditor(QMainWindow):
             self.listParticles.takeItem(delete_index)
             self.particle_data.particles.pop(delete_index)
 
-        self.status(f"Deleted {len(delete_indexes)} particle(s).")
+        self.status(f"Deleted {len(delete_indexes)} particle(s).", StatusColor.INFO)
 
     def clone_particles(self):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
-            self.status("No particle(s) selected!", True)
+            self.status("No particle(s) selected!", StatusColor.ERROR)
             return
 
         # Get selected list indexes and sort them by original order
@@ -647,28 +662,28 @@ class PygapaEditor(QMainWindow):
         self.listParticles.clearSelection()
         self.listParticles.setCurrentRow(new_index)
 
-        self.status(f"Cloned {len(clone_indexes)} particle(s).")
+        self.status(f"Cloned {len(clone_indexes)} particle(s).", StatusColor.INFO)
 
     def copy_particle(self):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
             return
         if self.current_particle is None:
-            self.status("No particle selected!", True)
+            self.status("No particle selected!", StatusColor.ERROR)
             return
 
         self.copied_particle = deepcopy(self.particle_data.particles[self.listParticles.currentRow()])
 
-        self.status(f"Copied particle {self.copied_particle.name}.")
+        self.status(f"Copied particle {self.copied_particle.name}.", StatusColor.INFO)
 
     def replace_particle(self):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
             return
 
         if self.current_particle is None:
-            self.status("No particle selected!", True)
+            self.status("No particle selected!", StatusColor.ERROR)
             return
         if self.copied_particle is None:
-            self.status("No particle copy available!", True)
+            self.status("No particle copy available!", StatusColor.ERROR)
             return
 
         # Replace current effect, we want to preserve references to current effect and its members
@@ -679,13 +694,13 @@ class PygapaEditor(QMainWindow):
         self.select_particle()
         self.update_current_particle_list_item()
 
-        self.status(f"Replaced particle {old_description} with {self.copied_particle.name}.")
+        self.status(f"Replaced particle {old_description} with {self.copied_particle.name}.", StatusColor.INFO)
 
     def export_particles(self):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
-            self.status("No particle(s) selected!", True)
+            self.status("No particle(s) selected!", StatusColor.ERROR)
             return
 
         export_folder = QFileDialog.getExistingDirectory(self, "Export particles to...")
@@ -700,7 +715,7 @@ class PygapaEditor(QMainWindow):
             fp_out_particle = os.path.join(export_folder, f"{particle.name}.json")
             write_json_file(fp_out_particle, particle.pack_json())
 
-        self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".")
+        self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".", StatusColor.INFO)
 
     def import_particles(self):
         if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
@@ -756,7 +771,7 @@ class PygapaEditor(QMainWindow):
         self.listParticles.clearSelection()
         self.listParticles.setCurrentRow(new_index)
 
-        self.status(f"Imported {new_particle_count} particle(s), replaced {replaced_entries} existing particle(s).")
+        self.status(f"Imported {new_particle_count} particle(s), replaced {replaced_entries} existing particle(s).", StatusColor.INFO)
 
     def update_current_particle_list_item(self):
         self.listParticles.selectedItems()[0].setText(self.current_particle.name)
@@ -827,13 +842,13 @@ class PygapaEditor(QMainWindow):
         self.listTextures.clearSelection()
         self.listTextures.setCurrentRow(new_index)
 
-        self.status(f"Imported {new_texture_count} texture(s), replaced {replaced_entries} existing texture(s).")
+        self.status(f"Imported {new_texture_count} texture(s), replaced {replaced_entries} existing texture(s).", StatusColor.INFO)
 
     def delete_textures(self):
         if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
             return
         if len(self.listTextures.selectedItems()) == 0:
-            self.status("No texture(s) selected!", True)
+            self.status("No texture(s) selected!", StatusColor.ERROR)
             return
 
         # Get selected list indexes
@@ -847,13 +862,13 @@ class PygapaEditor(QMainWindow):
             key = self.listTextures.takeItem(delete_index).text()
             self.particle_data.textures.pop(key)
 
-        self.status(f"Deleted {len(delete_indexes)} particle(s).")
+        self.status(f"Deleted {len(delete_indexes)} particle(s).", StatusColor.INFO)
 
     def export_textures(self):
         if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
             return
         if len(self.listTextures.selectedItems()) == 0:
-            self.status("No texture(s) selected!", True)
+            self.status("No texture(s) selected!", StatusColor.ERROR)
             return
 
         export_folder = QFileDialog.getExistingDirectory(self, "Export textures to...")
@@ -866,7 +881,7 @@ class PygapaEditor(QMainWindow):
             fp_out_texture = os.path.join(export_folder, f"{texture_name}.bti")
             write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
 
-        self.status(f"Exported {len(texture_names)} effect(s) to \"{export_folder}\".")
+        self.status(f"Exported {len(texture_names)} effect(s) to \"{export_folder}\".", StatusColor.INFO)
 
 
 def dump_particle_data(in_folder: str, out_folder: str):

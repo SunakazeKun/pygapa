@@ -1,7 +1,7 @@
+import struct
 from enum import IntFlag
 
-from formats.compression import decompress, decompress_szs, decompress_szp, JKRCompressionType
-from formats.helper import *
+from formats import jkrcomp, helper
 
 
 class JKRFileAttr(IntFlag):
@@ -136,7 +136,7 @@ class JKRDirEntry:
 
 
 class JKRFileEntry:
-    def __init__(self, name: str, data=None, compression: int = JKRCompressionType.NONE, is_rel: bool = False):
+    def __init__(self, name: str, data=None, compression: int = jkrcomp.JKRCompressionType.NONE, is_rel: bool = False):
         self.__name = name
         self.__data = data
         self.set_compression(compression)
@@ -160,8 +160,8 @@ class JKRFileEntry:
         self.__data = data
 
     def set_compression(self, compression: int):
-        if compression < JKRCompressionType.NONE or compression >= JKRCompressionType.ASR:
-            compression = JKRCompressionType.NONE
+        if compression < jkrcomp.JKRCompressionType.NONE or compression >= jkrcomp.JKRCompressionType.ASR:
+            compression = jkrcomp.JKRCompressionType.NONE
         self.__compression = compression
 
     def get_compression(self):
@@ -207,10 +207,10 @@ class JKRArchive:
 
         # In SMG1/2, and possibly other games, RARC files are usually compressed. We have to try decompressing our
         # buffer before we can start parsing the actual archive data.
-        buffer = decompress(buffer)
+        buffer = jkrcomp.decompress(buffer)
 
         # Parse header
-        if get_magic4(buffer) != "RARC":
+        if helper.get_magic4(buffer) != "RARC":
             raise Exception("Fatal! No RARC data provided.")
 
         # The header consists of many more values than we are using here. There is no need to parse the remaining values
@@ -222,8 +222,8 @@ class JKRArchive:
         # here: number of total file entries INCLUDING directories, total size of the string pool, and total number of
         # total file entries.
         num_nodes, off_nodes = struct.unpack_from(">2I", buffer, off_info)
-        off_files = get_u32(buffer, off_info + 0xC) + off_info
-        off_strings = get_u32(buffer, off_info + 0x14) + off_info
+        off_files = helper.get_u32(buffer, off_info + 0xC) + off_info
+        off_strings = helper.get_u32(buffer, off_info + 0x14) + off_info
 
         # Fix relative offsets
         off_data = off_info + len_info
@@ -243,7 +243,7 @@ class JKRArchive:
             off_name += off_strings
 
             # Read the current node's name, create and append a directory entry for the node
-            dir_name = read_ascii(buffer, off_name)
+            dir_name = helper.read_ascii(buffer, off_name)
             dir_entry = JKRDirEntry(dir_name)
             all_nodes.append(dir_entry)
 
@@ -271,7 +271,7 @@ class JKRArchive:
                 flags = (flags >> 24) & 0xFF
 
                 # Read file name
-                file_name = read_ascii(buffer, off_name)
+                file_name = helper.read_ascii(buffer, off_name)
 
                 # Update the next file offset already in case we find one of the two useless directories.
                 off_file += 0x14
@@ -289,21 +289,21 @@ class JKRArchive:
                     # Is file data compressed? If so, determine the compression type (YAZ0 or YAY0)
                     if flags & JKRFileAttr.COMPRESSED:
                         if flags & JKRFileAttr.USE_YAZ0:
-                            compression_type = JKRCompressionType.SZS
+                            compression_type = jkrcomp.JKRCompressionType.SZS
                         else:
-                            compression_type = JKRCompressionType.SZP
+                            compression_type = jkrcomp.JKRCompressionType.SZP
                     else:
-                        compression_type = JKRCompressionType.NONE
+                        compression_type = jkrcomp.JKRCompressionType.NONE
 
                     # Read file data
                     off_file_data = off_data + off_file_data
                     buf_file_data = buffer[off_file_data:off_file_data + len_file_data]
 
                     # Decompress file data if necessary
-                    if compression_type == JKRCompressionType.SZS:
-                        buf_file_data = decompress_szs(buf_file_data, False)
-                    elif compression_type == JKRCompressionType.SZP:
-                        buf_file_data = decompress_szp(buf_file_data, False)
+                    if compression_type == jkrcomp.JKRCompressionType.SZS:
+                        buf_file_data = jkrcomp.decompress_szs(buf_file_data, False)
+                    elif compression_type == jkrcomp.JKRCompressionType.SZP:
+                        buf_file_data = jkrcomp.decompress_szp(buf_file_data, False)
 
                     # Test if the file is a REL file
                     is_rel = flags & JKRFileAttr.IS_REL
@@ -369,7 +369,7 @@ class JKRArchive:
             else:
                 off = len(out_strings)
                 string_offsets[val] = off
-                out_strings += pack_ascii(val)
+                out_strings += helper.pack_ascii(val)
             return off
 
         # These two directory names always appear first in the string table
@@ -445,17 +445,17 @@ class JKRArchive:
 
         # Create nodes for all folders
         create_nodes(self.__root)
-        out_buf += align32(out_buf)
+        out_buf += helper.align32(out_buf)
 
         # Create entries for all files
         off_files = len(out_buf) - 0x20
         create_files(self.__root, 0xFFFFFFFF)
-        out_buf += align32(out_buf)
+        out_buf += helper.align32(out_buf)
 
         # Join output with strings
         off_strings = len(out_buf) - 0x20
         out_buf += out_strings
-        out_buf += align32(out_buf)
+        out_buf += helper.align32(out_buf)
         del out_strings
 
         # Join output with data
@@ -466,7 +466,7 @@ class JKRArchive:
         del out_data
 
         # Write header and information block data
-        struct.pack_into(">4s5I", out_buf, 0x0, pack_magic4("RARC"), len(out_buf), 0x20, off_data, len_data, len_data)
+        struct.pack_into(">4s5I", out_buf, 0x0, helper.pack_magic4("RARC"), len(out_buf), 0x20, off_data, len_data, len_data)
         struct.pack_into(">6IHB", out_buf, 0x20, num_nodes, 0x20, num_total_files, off_files, len_strings, off_strings, num_total_files, 1)
 
         return out_buf

@@ -1,7 +1,6 @@
-import formats.bcsv as bcsv
-import formats.jpac210 as jpac210
-from formats import rarc
-from formats.helper import *
+import os
+
+from formats import bcsv, jpac210, helper, rarc
 
 DRAW_ORDERS = [
     "(undefined)",
@@ -243,8 +242,8 @@ class ParticleData:
         self.particles.clear()
         self.effects.clear()
 
-        in_json = read_json_file(json_file)
-        in_effects_json = read_json_file(effects_json_file)
+        in_json = helper.read_json_file(json_file)
+        in_effects_json = helper.read_json_file(effects_json_file)
 
         unused_texture_names = list()
 
@@ -252,7 +251,7 @@ class ParticleData:
         for texture_name in in_json["textures"]:
             texture = jpac210.JPATexture()
             texture.file_name = texture_name
-            texture.bti_data = read_file(os.path.join(bti_folder, f"{texture_name}.bti"))
+            texture.bti_data = helper.read_bin_file(os.path.join(bti_folder, f"{texture_name}.bti"))
 
             self.textures[texture_name] = texture
             unused_texture_names.append(texture_name)
@@ -261,7 +260,7 @@ class ParticleData:
         for particle_name in in_json["particles"]:
             particle = jpac210.JPAResource()
             particle.name = particle_name
-            in_particle_json = read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
+            in_particle_json = helper.read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
             particle.unpack_json(in_particle_json)
 
             for texture_name in particle.texture_names:
@@ -322,9 +321,9 @@ class ParticleData:
             self.particles.append(particle)
 
     def unpack_bin(self, jpc_file: str, names_file: str, effects_file: str):
-        jpc_data = read_file(jpc_file)
-        names_data = read_file(names_file)
-        effects_data = read_file(effects_file)
+        jpc_data = helper.read_bin_file(jpc_file)
+        names_data = helper.read_bin_file(names_file)
+        effects_data = helper.read_bin_file(effects_file)
         self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
     def unpack_rarc(self, directory: rarc.JKRDirEntry):
@@ -350,24 +349,24 @@ class ParticleData:
         print("Dump particles ...")
         for jpa in self.particles:
             out_json["particles"].append(jpa.name)
-            write_json_file(os.path.join(particles_folder, f"{jpa.name}.json"), jpa.pack_json())
+            helper.write_json_file(os.path.join(particles_folder, f"{jpa.name}.json"), jpa.pack_json())
 
         # Collect texture names and write texture BTIs
         print("Dump textures ...")
         for jpatex_name, jpatex in self.textures.items():
             out_json["textures"].append(jpatex_name)
 
-            write_file(os.path.join(bti_folder, f"{jpatex_name}.bti"), jpatex.bti_data)
+            helper.write_file(os.path.join(bti_folder, f"{jpatex_name}.bti"), jpatex.bti_data)
 
         # Write lists of particles and textures
-        write_json_file(json_file, out_json)
+        helper.write_json_file(json_file, out_json)
 
         # Pack AutoEffectList entries
         print("Dump effects ...")
         out_effects_json = [effect.pack_json() for effect in self.effects]
 
         # Write AutoEffectList entries
-        write_json_file(effects_json_file, out_effects_json)
+        helper.write_json_file(effects_json_file, out_effects_json)
 
     def __pack_bin(self):
         particle_container = jpac210.JParticlesContainer()
@@ -433,9 +432,9 @@ class ParticleData:
         os.makedirs(os.path.dirname(effects_file), exist_ok=True)
 
         # Write all the files
-        write_file(jpc_file, self.__tmp_packed_particle_container)
-        write_file(names_file, self.__tmp_packed_particle_names)
-        write_file(effects_file, self.__tmp_packed_effects_data)
+        helper.write_file(jpc_file, self.__tmp_packed_particle_container)
+        helper.write_file(names_file, self.__tmp_packed_particle_names)
+        helper.write_file(effects_file, self.__tmp_packed_effects_data)
 
         # Release buffered data
         del self.__tmp_packed_particle_container

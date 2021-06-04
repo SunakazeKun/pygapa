@@ -7,13 +7,12 @@ from enum import IntEnum
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
-from formats import jpac210, rarc, compression, helper
-import formats.particle_data as particle_data
+from formats import jkrcomp, helper, jpac210, particle_data, rarc
 
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.5"
+APP_VERSION = "v0.6"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -165,7 +164,7 @@ class PygapaEditor(QMainWindow):
         # Try to unpack particle data
         try:
             self.effect_arc = rarc.JKRArchive()
-            self.effect_arc.unpack(helper.read_file(self.particle_data_file))
+            self.effect_arc.unpack(helper.read_bin_file(self.particle_data_file))
 
             self.particle_data.unpack_rarc(self.effect_arc.get_root())
         except Exception:  # Will be handled better in the future, smh
@@ -216,7 +215,7 @@ class PygapaEditor(QMainWindow):
 
         # Pack Effect.arc, try to compress the buffer and write to output file.
         packed_arc = self.effect_arc.pack()
-        compressed = compression.write_file_try_szs_external(self.particle_data_file, packed_arc)
+        compressed = jkrcomp.write_file_try_szs_external(self.particle_data_file, packed_arc)
 
         if compressed:
             self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
@@ -817,7 +816,7 @@ class PygapaEditor(QMainWindow):
 
             # Try to read data from BTI file
             try:
-                texture.bti_data = helper.read_file(import_file)
+                texture.bti_data = helper.read_bin_file(import_file)
             except Exception:
                 # todo: better exception handling?
                 self.show_critical(f"An error occured when importing from \"{import_file}\".")

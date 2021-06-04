@@ -1,6 +1,7 @@
+import struct
 from copy import deepcopy
 
-from formats.helper import *
+from formats import helper
 
 
 class JPATexture:
@@ -10,19 +11,19 @@ class JPATexture:
         self.total_size = 0          # Total size in bytes, set when (un)packing
 
     def unpack(self, buffer, offset: int = 0):
-        self.total_size = get_s32(buffer, offset + 0x4)
-        self.file_name = read_sjis(buffer, offset + 0xC)
+        self.total_size = helper.get_s32(buffer, offset + 0x4)
+        self.file_name = helper.read_sjis(buffer, offset + 0xC)
         self.bti_data = buffer[offset + 0x20:offset + self.total_size]
 
     def pack(self) -> bytes:
-        out_name = pack_sjis(self.file_name)
+        out_name = helper.pack_sjis(self.file_name)
 
         # Calculate and create padding bytes
         pad_name = 0x14 - len(out_name)
         if pad_name < 0:
             raise Exception(f"File name {self.file_name} is too long to pack!")
         out_pad_name = bytes(pad_name)
-        out_pad_bti = align32(self.bti_data)
+        out_pad_bti = helper.align32(self.bti_data)
 
         # Calculate total size; 0x20 = header and name size
         self.total_size = 0x20 + len(self.bti_data) + len(out_pad_bti)
@@ -57,7 +58,7 @@ class JPADynamicsBlock(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -65,8 +66,8 @@ class JPADynamicsBlock(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "BEM1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "BEM1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -77,7 +78,7 @@ class JPAFieldBlock(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -85,8 +86,8 @@ class JPAFieldBlock(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "FLD1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "FLD1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -97,7 +98,7 @@ class JPAKeyBlock(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -105,8 +106,8 @@ class JPAKeyBlock(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "KFA1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "KFA1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -117,7 +118,7 @@ class JPABaseShape(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -125,8 +126,8 @@ class JPABaseShape(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "BSP1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "BSP1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -137,7 +138,7 @@ class JPAExtraShape(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -145,8 +146,8 @@ class JPAExtraShape(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "ESP1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "ESP1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -157,7 +158,7 @@ class JPAChildShape(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -165,8 +166,8 @@ class JPAChildShape(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "SSP1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "SSP1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -177,7 +178,7 @@ class JPAExTexShape(JPAChunk):
         self.binary_data = None
 
     def unpack(self, buffer, offset: int = 0):
-        size = get_s32(buffer, offset + 0x4) - 8
+        size = helper.get_s32(buffer, offset + 0x4) - 8
         offset += 0x8
         self.binary_data = buffer[offset:offset + size]
 
@@ -185,8 +186,8 @@ class JPAExTexShape(JPAChunk):
         self.binary_data = bytes.fromhex(entry)
 
     def pack(self) -> bytes:
-        out_data = self.binary_data + align4(self.binary_data)
-        return "ETX1".encode("ascii") + pack_s32(8 + len(out_data)) + out_data
+        out_data = self.binary_data + helper.align4(self.binary_data)
+        return "ETX1".encode("ascii") + helper.pack_s32(8 + len(out_data)) + out_data
 
     def pack_json(self):
         return self.binary_data.hex()
@@ -230,7 +231,7 @@ class JPAResource:
         for i in range(num_sections):
             # Parse block header and extract block
             magic = buffer[offset:offset + 0x4].decode("ascii")
-            size = get_s32(buffer, offset + 0x4)
+            size = helper.get_s32(buffer, offset + 0x4)
             block = buffer[offset:offset + size]
 
             # Parse JPADynamicsBlock
@@ -266,7 +267,7 @@ class JPAResource:
             # Parse texture ID database
             elif magic == "TDB1":
                 for j in range(num_textures):
-                    self.texture_ids.append(get_s16(block, 0x8 + j * 0x2))
+                    self.texture_ids.append(helper.get_s16(block, 0x8 + j * 0x2))
             # Just to be sure we find a wrong section
             else:
                 raise Exception(f"Unknown section {magic}")
@@ -357,10 +358,10 @@ class JPAResource:
         out_tdb1 = bytearray()
 
         for texture_id in self.texture_ids:
-            out_tdb1 += pack_s16(texture_id)
-        out_tdb1 += align4(out_tdb1, "\0")
+            out_tdb1 += helper.pack_s16(texture_id)
+        out_tdb1 += helper.align4(out_tdb1, "\0")
 
-        out_tdb1 = "TDB1".encode("ascii") + pack_s32(len(out_tdb1) + 8) + out_tdb1
+        out_tdb1 = "TDB1".encode("ascii") + helper.pack_s32(len(out_tdb1) + 8) + out_tdb1
 
         # Assemble output
         out_buf += out_tdb1
@@ -429,7 +430,7 @@ class JParticlesContainer:
         self.textures.clear()
 
         # Parse header
-        if get_magic8(buffer, offset) != "JPAC2-10":
+        if helper.get_magic8(buffer, offset) != "JPAC2-10":
             raise Exception("Fatal! No JPAC2-10 data provided.")
 
         num_particles, num_textures, off_textures = struct.unpack_from(">HHI", buffer, offset + 0x8)
@@ -464,7 +465,7 @@ class JParticlesContainer:
 
     def pack(self):
         # Pack header, we will write the textures offset later
-        out_buf = bytearray() + pack_magic8("JPAC2-10")
+        out_buf = bytearray() + helper.pack_magic8("JPAC2-10")
         out_buf += struct.pack(">HHI", len(self.particles), len(self.textures), 0)
 
         # Pack JPAResource entries
@@ -485,7 +486,7 @@ class JParticlesContainer:
             out_buf += particle.pack()
 
         # Align buffer and write offset to textures
-        out_buf += align32(out_buf)
+        out_buf += helper.align32(out_buf)
         struct.pack_into(">I", out_buf, 0xC, len(out_buf))
 
         # Pack JPATexture entries

@@ -158,22 +158,40 @@ def pack_sjis(val: str) -> bytes:
     return __pack_string("shift_jisx0213", val)
 
 
-def get_filename(val: str) -> str:
-    """Extracts the filename without extension from the specified file path."""
-    return os.path.splitext(os.path.basename(val))[0]
+# ----------------------------------------------------------------------------------------------------------------------
+# File I/O helpers
+# ----------------------------------------------------------------------------------------------------------------------
+def get_filename(file_path: str) -> str:
+    """
+    Extracts the filename without extension from the specified file path.
+
+    :param file_path: the file path to extract the basename from
+    :returns: basename of the specified path without extension
+    """
+    return os.path.splitext(os.path.basename(file_path))[0]
 
 
-# File I/O functions
+def read_bin_file(file_path: str) -> bytearray:
+    """
+    Reads the binary data from the specified file and returns the contents as a bytearray.
 
-def read_file(file_path) -> bytearray:
-    """Reads the binary data from the specified file and returns it as a bytearray."""
+    :param file_path: the file path to read the contents from
+    :returns: a bytebuffer containing the file's contents
+    """
     with open(file_path, "rb") as f:
         ret = f.read()
     return bytearray(ret)
 
 
-def write_file(file_path, buffer):
-    """Writes the contents of a bytes-like object to the specified file."""
+def write_file(file_path: str, buffer):
+    """
+    Writes the contents of a bytes-like buffer to the specified file. If the parent directories do not exist, they will
+    be created.
+
+    :param file_path: the file to write the data into
+    :param buffer: the data to write to the file
+    :raises ValueError: when buffer is None
+    """
     if buffer is None:
         raise ValueError("Tried to write non-existent data to file.")
 
@@ -186,15 +204,26 @@ def write_file(file_path, buffer):
         f.flush()
 
 
-def read_json_file(file_path):
-    """Reads the JSON data from the specified file. This assumes that the file uses UTF-8 encoding."""
+def read_json_file(file_path: str):
+    """
+    Reads the JSON data from the specified file. This assumes that the file uses UTF-8 encoding.
+
+    :param file_path: the file path to load the JSON data from
+    :returns: a list or dictionary containing JSON data
+    """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
 
 
 def write_json_file(file_path: str, data):
-    """Writes the JSON data to the specified file using UTF-8 encoding. Each level/node is indented by four spaces."""
+    """
+    Writes the JSON data to the specified file using UTF-8 encoding. Each level/node is indented by four spaces. If the
+    parent directories do not exist, they will be created.
+
+    :param file_path: the file to write the data into
+    :param data: the JSON data to write to the file
+    """
     # Try to create parent directories if necessary
     if file_path.find("/") != -1:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -204,31 +233,64 @@ def write_json_file(file_path: str, data):
         f.flush()
 
 
-# Buffer alignment functions
-
+# ----------------------------------------------------------------------------------------------------------------------
+# Buffer alignment helpers
+# ----------------------------------------------------------------------------------------------------------------------
 def __align(buffer, size, pad_chr):
-    """Returns the padding bytes required to align the buffer to the specified size."""
     pad_len = len(buffer) & (size - 1)
+    pad_chr = ord(pad_chr)
     if pad_len != 0:
-        return bytearray([ord(pad_chr)] * (size - pad_len))
+        return bytearray([pad_chr] * (size - pad_len))
     return bytearray()
 
 
 def align4(buffer, pad_chr="\0"):
-    """Returns the padding bytes required to align the specified buffer to 4 bytes."""
+    """
+    Generate the padding bytes required to align the specified buffer to 4 bytes. The returned buffer consists of 0 to 3
+    bytes, depending on the input buffer's current size. NULL (0) is used to pad out the space, but the padding char
+    can be specified.
+
+    :param buffer: the buffer to generate the alignment for
+    :param pad_chr: ASCII character to pad aligned space with
+    :returns: bytearray containing alignment padding
+    """
     return __align(buffer, 4, pad_chr)
 
 
 def align8(buffer, pad_chr="\0"):
-    """Returns the padding bytes required to align the specified buffer to 8 bytes."""
+    """
+    Generate the padding bytes required to align the specified buffer to 8 bytes. The returned buffer consists of 0 to 7
+    bytes, depending on the input buffer's current size. NULL (0) is used to pad out the space, but the padding char
+    can be specified.
+
+    :param buffer: the buffer to generate the alignment for
+    :param pad_chr: ASCII character to pad aligned space with
+    :returns: bytearray containing alignment padding
+    """
     return __align(buffer, 8, pad_chr)
 
 
 def align16(buffer, pad_chr="\0"):
-    """Returns the padding bytes required to align the specified buffer to 16 bytes."""
+    """
+    Generate the padding bytes required to align the specified buffer to 16 bytes. The returned buffer consists of 0 to
+    15 bytes, depending on the input buffer's current size. NULL (0) is used to pad out the space, but the padding char
+    can be specified.
+
+    :param buffer: the buffer to generate the alignment for
+    :param pad_chr: ASCII character to pad aligned space with
+    :returns: bytearray containing alignment padding
+    """
     return __align(buffer, 16, pad_chr)
 
 
 def align32(buffer, pad_chr="\0"):
-    """Returns the padding bytes required to align the specified buffer to 32 bytes."""
+    """
+    Generate the padding bytes required to align the specified buffer to 32 bytes. The returned buffer consists of 0 to
+    31 bytes, depending on the input buffer's current size. NULL (0) is used to pad out the space, but the padding char
+    can be specified.
+
+    :param buffer: the buffer to generate the alignment for
+    :param pad_chr: ASCII character to pad aligned space with
+    :returns: bytearray containing alignment padding
+    """
     return __align(buffer, 32, pad_chr)

@@ -289,9 +289,9 @@ class JKRArchive:
                     # Is file data compressed? If so, determine the compression type (YAZ0 or YAY0)
                     if flags & JKRFileAttr.COMPRESSED:
                         if flags & JKRFileAttr.USE_YAZ0:
-                            compression_type = JKRCompressionType.YAZ0
+                            compression_type = JKRCompressionType.SZS
                         else:
-                            compression_type = JKRCompressionType.YAY0
+                            compression_type = JKRCompressionType.SZP
                     else:
                         compression_type = JKRCompressionType.NONE
 
@@ -300,13 +300,13 @@ class JKRArchive:
                     buf_file_data = buffer[off_file_data:off_file_data + len_file_data]
 
                     # Decompress file data if necessary
-                    if compression_type == JKRCompressionType.YAZ0:
+                    if compression_type == JKRCompressionType.SZS:
                         buf_file_data = decompress_szs(buf_file_data, False)
-                    elif compression_type == JKRCompressionType.YAY0:
+                    elif compression_type == JKRCompressionType.SZP:
                         buf_file_data = decompress_szp(buf_file_data, False)
 
                     # Test if the file is a REL file
-                    is_rel = test_bit(flags, JKRFileAttr.IS_REL)
+                    is_rel = flags & JKRFileAttr.IS_REL
 
                     # Create and append file entry
                     file_entry = JKRFileEntry(file_name, buf_file_data, compression_type, is_rel)

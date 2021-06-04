@@ -177,6 +177,10 @@ def write_file(file_path, buffer):
     if buffer is None:
         raise ValueError("Tried to write non-existent data to file.")
 
+    # Try to create parent directories if necessary
+    if file_path.find("/") != -1:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
     with open(file_path, "wb") as f:
         f.write(buffer)
         f.flush()
@@ -191,6 +195,10 @@ def read_json_file(file_path):
 
 def write_json_file(file_path: str, data):
     """Writes the JSON data to the specified file using UTF-8 encoding. Each level/node is indented by four spaces."""
+    # Try to create parent directories if necessary
+    if file_path.find("/") != -1:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
         f.flush()
@@ -224,9 +232,3 @@ def align16(buffer, pad_chr="\0"):
 def align32(buffer, pad_chr="\0"):
     """Returns the padding bytes required to align the specified buffer to 32 bytes."""
     return __align(buffer, 32, pad_chr)
-
-
-# Bit functions
-
-def test_bit(val: int, flag: int) -> bool:
-    return (val >> flag) & 1 == 1

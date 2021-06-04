@@ -216,7 +216,7 @@ class PygapaEditor(QMainWindow):
 
         # Pack Effect.arc, try to compress the buffer and write to output file.
         packed_arc = self.effect_arc.pack()
-        compressed = compression.try_compress_szs_external(self.particle_data_file, packed_arc)
+        compressed = compression.write_file_try_szs_external(self.particle_data_file, packed_arc)
 
         if compressed:
             self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)

@@ -1,9 +1,10 @@
+import os
 import subprocess
 from platform import system
 from enum import IntEnum
 from shutil import which
 
-from formats.helper import *
+from formats import helper
 
 
 class JKRCompressionType(IntEnum):
@@ -58,11 +59,11 @@ def decompress_szs(buffer, check: bool = True) -> bytearray:
     :param check: declares whether to check the magic bytes first (True) or force the decompression (False)
     :returns: a bytearray containing the decompressed data or the input buffer if no compressed data was found.
     """
-    if check and get_magic4(buffer) != "Yaz0":
+    if check and helper.get_magic4(buffer) != "Yaz0":
         return buffer
 
     # Get decompressed size and prepare output buffer
-    len_out = get_s32(buffer, 0x4)
+    len_out = helper.get_s32(buffer, 0x4)
     buf_out = bytearray(len_out)
 
     off_in = 16  # Compressed data comes after header
@@ -129,11 +130,11 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
     :param check: declares whether to check the magic bytes first (True) or force the decompression (False)
     :returns: a bytearray containing the decompressed data or the input buffer if no compressed data was found.
     """
-    if check and get_magic4(buffer) != "Yay0":
+    if check and helper.get_magic4(buffer) != "Yay0":
         return buffer
 
     # Parse header and prepare output buffer
-    len_out, off_copy_table, off_chunks = struct.unpack_from(">3I", buffer, 0x4)
+    len_out, off_copy_table, off_chunks = helper.struct.unpack_from(">3I", buffer, 0x4)
     buf_out = bytearray(len_out)
 
     off_in = 16  # Compressed data comes after header
@@ -148,7 +149,7 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
         # chunk table. Otherwise, we read information from the copy table to determine which decompressed bytes to copy
         # into the output buffer.
         if counter == 0:
-            block = get_u32(buffer, off_in)
+            block = helper.get_u32(buffer, off_in)
             counter = 32
             off_in += 4
 
@@ -206,7 +207,7 @@ def write_file_try_szs_external(file_path: str, buffer, compression_level: str =
     :returns: True if compression was successful, False if compression failed
     """
     # Write buffered data to file, then we try to apply external SZS compressors on it
-    write_file(file_path, buffer)
+    helper.write_file(file_path, buffer)
 
     # Try to compress with WSZST if it exists in PATH
     if which("wszst") is not None:
@@ -216,7 +217,7 @@ def write_file_try_szs_external(file_path: str, buffer, compression_level: str =
 
             return True
         except subprocess.CalledProcessError:
-            print("Couldn't compress the file. Does wszst exist?")
+            print("Couldn't compress the file using wszst.")
 
     # Try to compress with yaz0enc if WSZST failed and if running on a Windows OS
     if system() == "Windows" and os.path.exists("yaz0enc.exe"):

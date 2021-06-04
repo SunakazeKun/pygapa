@@ -1,59 +1,45 @@
-from formats.helper import *
+import struct
+from enum import IntEnum
 
-# Hash and field name helpers
-HASHED_FIELD_NAMES = dict()
-
-
-def field_name_to_hash(field_name: str) -> int:
-    """Calculates the 32-bit lookup hash for the specified SJIS field name string."""
-    field_hash = 0
-    for ch in field_name.encode("shift_jisx0213"):
-        field_hash *= 31
-        field_hash += ch
-    return field_hash & 0xFFFFFFFF
+from formats import helper, mrhash
 
 
-def hash_to_field_name(field_hash: int) -> str:
-    """Attempts to retrieve a known and valid field name for the specified field hash."""
-    if field_hash in HASHED_FIELD_NAMES:
-        return HASHED_FIELD_NAMES[field_hash]
-    else:
-        return f"[{field_hash:08X}]"
+class JMapFieldType(IntEnum):
+    LONG = 0
+    # According to noclip.website, type 1 is a non-SJIS string, however, couldn't find anything in SMG1/2 about it yet.
+    # It is possible that this type is only found in Luigi's Mansion and/or Donkey Kong Jungle Beat, two GameCube games
+    # that also use the JMap library.
+    FLOAT = 2
+    UNSIGNED_LONG = 3
+    SHORT = 4
+    UNSIGNED_CHAR = 5
+    STRING = 6
+
+    def size(self):
+        """
+        Returns the entry size for this field type. All field types occupy 4 bytes, but SHORT and UNSIGNED_CHAR use 2
+        and 1 byte(s), respectively.
+        """
+        if self == self.SHORT:
+            return 2
+        elif self == self.UNSIGNED_CHAR:
+            return 1
+        return 4
+
+    def mask(self):
+        """
+        Returns the entry mask for this field type. All field types use a 32-bit mask, but SHORT uses a 16-bit mask and
+        UNSIGNED_CHAR uses an 8-bit mask.
+        """
+        if self == self.SHORT:
+            return 0xFFFF
+        elif self == self.UNSIGNED_CHAR:
+            return 0xFF
+        return 0xFFFFFFFF
 
 
-# Populate known field names and their hashes
-__FIELD_NAMES = [
-    "name", "id", "No", "GroupName", "AnimName", "ContinueAnimEnd", "UniqueName", "EffectName", "ParentName",
-    "JointName", "OffsetX", "OffsetY", "OffsetZ", "StartFrame", "EndFrame", "Affect", "Follow", "ScaleValue",
-    "RateValue", "PrmColor", "EnvColor", "LightAffectValue", "DrawOrder"
-]
-
-for field in __FIELD_NAMES:
-    HASHED_FIELD_NAMES[field_name_to_hash(field)] = field
-
-# We don't need the list of field names anymore
-__FIELD_NAMES.clear()
-del __FIELD_NAMES
-
-
-# Field type identifiers
-FIELD_TYPE_S32 = 0
-FIELD_TYPE_F32 = 2
-FIELD_TYPE_S32_2 = 3
-FIELD_TYPE_S16 = 4
-FIELD_TYPE_U8 = 5
-FIELD_TYPE_STRING = 6
-FIELD_SIZES = [4, -1, 4, 4, 2, 1, 4]
-FIELD_MASKS = [0xFFFFFFFF, -1, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFF, 0xFF, 0xFFFFFFFF]
-
-
-def is_valid_field(field_type: int):
-    if field_type == 1 or field_type < FIELD_TYPE_S32 or field_type > FIELD_TYPE_STRING:
-        raise Exception(f"Unknown field type 0x{field_type:02X}")
-
-
-class Field:
-    def __init__(self, field_hash, mask, offset, shift, field_type, field_name):
+class JMapField:
+    def __init__(self, field_hash: int, mask: int, offset: int, shift: int, field_type: JMapFieldType, field_name: str):
         self.hash = field_hash
         self.mask = mask
         self.offset = offset
@@ -61,23 +47,27 @@ class Field:
         self.type = field_type
         self.name = field_name
 
+    def __str__(self):
+        return self.name
 
-class Bcsv:
+    def __len__(self):
+        return self.type.size()
+
+
+class JMapInfo:
     def __init__(self):
         self.fields = dict()
         self.entries = list()
 
-    def new_field(self, field_name, field_type):
+    def new_field(self, field_name, field_type: JMapFieldType, shift: int = 0):
         # Does a field with that name exist already?
         if field_name in self.fields:
             raise Exception(f"Field {field_name} already exists!")
 
-        is_valid_field(field_type)
-
         # Create new field
-        field_hash = field_name_to_hash(field_name)
-        mask = FIELD_MASKS[field_type]
-        self.fields[field_name] = Field(field_hash, mask, -1, 0, field_type, field_name)
+        field_hash = mrhash.calc_hash(field_name)
+        mask = field_type.mask()
+        self.fields[field_name] = JMapField(field_hash, mask, -1, shift, field_type, field_name)
 
     def unpack(self, buffer, offset: int = 0):
         self.fields.clear()
@@ -93,10 +83,9 @@ class Bcsv:
             off_field = offset + 0x10 + i * 0xC
 
             field_hash, mask, entry_offset, shift, field_type = struct.unpack_from(">IIHBB", buffer, off_field)
-            is_valid_field(field_type)
-            field_name = hash_to_field_name(field_hash)
+            field_name = mrhash.find_name(field_hash)
 
-            self.fields[field_name] = Field(field_hash, mask, entry_offset, shift, field_type, field_name)
+            self.fields[field_name] = JMapField(field_hash, mask, entry_offset, shift, field_type, field_name)
 
         # Read entries
         for i in range(num_entries):
@@ -106,86 +95,111 @@ class Bcsv:
                 offset = off_data + i * len_data_entry + f.offset
                 val = None
 
-                if f.type == FIELD_TYPE_S32 or f.type == FIELD_TYPE_S32_2:
-                    val = (get_s32(buffer, offset) & f.mask) >> f.shift
+                # Read long
+                if f.type == JMapFieldType.LONG:
+                    val = (helper.get_s32(buffer, offset) & f.mask) >> f.shift
 
                     # Make signed int
-                    if val & (1 << 31) != 0:
+                    if val & 0x80000000:
                         val |= ~0xFFFFFFFF
-                elif f.type == FIELD_TYPE_F32:
-                    val = round(get_f32(buffer, offset), 7)
-                elif f.type == FIELD_TYPE_S16:
-                    val = (get_s16(buffer, offset) & f.mask) >> f.shift
+                # Read float
+                elif f.type == JMapFieldType.FLOAT:
+                    val = round(helper.get_f32(buffer, offset), 7)
+                # Read unsigned long
+                elif f.type == JMapFieldType.UNSIGNED_LONG:
+                    val = (helper.get_u32(buffer, offset) & f.mask) >> f.shift
+                # Read short
+                elif f.type == JMapFieldType.SHORT:
+                    val = (helper.get_s16(buffer, offset) & f.mask) >> f.shift
 
                     # Make signed short
-                    if val & (1 << 15) != 0:
+                    if val & 0x8000:
                         val |= ~0xFFFF
-                elif f.type == FIELD_TYPE_U8:
+                # Read unsigned char
+                elif f.type == JMapFieldType.UNSIGNED_CHAR:
                     val = (buffer[offset] & f.mask) >> f.shift
-                elif f.type == FIELD_TYPE_STRING:
-                    off_string = off_strings + get_s32(buffer, offset)
-                    val = read_sjis(buffer, off_string)
+                # Read string
+                elif f.type == JMapFieldType.STRING:
+                    off_string = off_strings + helper.get_s32(buffer, offset)
+                    val = helper.read_sjis(buffer, off_string)
 
                 entry[f.name] = val
 
             self.entries.append(entry)
 
     def pack(self, sort_by_field: str = None):
-        buf_out = bytearray()
-
-        # Sort entries by field if specified
+        # Sort entries by field name if specified
         if sort_by_field is not None:
             entries = sorted(self.entries, key=lambda k: k[sort_by_field])
         else:
             entries = self.entries
 
-        # Pack fields and calculate entry length
-        len_data_entry = 0
-
-        for f in self.fields.values():
-            f.offset = len_data_entry  # Fix offset
-            len_data_entry += FIELD_SIZES[f.type]
-
-            buf_out += struct.pack(">IIHBB", f.hash, f.mask, f.offset, f.shift, f.type)
-
-        # Align entry length to 4 bytes
-        len_data_entry = (len_data_entry + 1) & ~3
-
-        # Write header and calculate data offset
+        # Fetch information about the contents and allocate output buffer
         num_entries = len(self.entries)
         num_fields = len(self.fields)
         off_data = 0x10 + num_fields * 0xC
 
-        buf_out = struct.pack(">4i", num_entries, num_fields, off_data, len_data_entry) + buf_out
+        buf_out = bytearray(off_data)
+
+        # Calculate entry length, fix field offsets and pack fields
+        len_data_entry = 0
+        off_field = 0x10
+
+        for field in self.fields.values():
+            len_field = len(field)
+
+            # Calculate aligned entry offset
+            if len_field & 1 == 0:  # even field size?
+                len_data_entry = (len_data_entry + 1) & ~(len_field - 1)
+
+            field.offset = len_data_entry  # Fix offset
+            len_data_entry += len_field
+
+            struct.pack_into(">2IH2B", buf_out, off_field, field.hash, field.mask, field.offset, field.shift, field.type)
+            off_field += 0xC
+
+        # Align entry size to 4 bytes
+        len_data_entry = (len_data_entry + 1) & ~3
+
+        # Pack header
+        struct.pack_into(">4i", buf_out, 0x0, num_entries, num_fields, off_data, len_data_entry)
 
         # Pack entries
-        buf_strings = bytearray()
+        buf_out += bytearray(len_data_entry * num_entries)
+        off_entry = off_data
+        off_strings = len(buf_out)
         string_offsets = dict()
 
         for entry in entries:
-            for ffield in sorted(self.fields.values(), key=lambda k: k.offset):
-                val = entry[ffield.name]
+            for field in self.fields.values():
+                off_val = off_entry + field.offset
+                val = entry[field.name]
 
-                if ffield.type == FIELD_TYPE_S32 or ffield.type == FIELD_TYPE_S32_2:
-                    buf_out += pack_u32((val << ffield.shift) & ffield.mask)
-                elif ffield.type == FIELD_TYPE_F32:
-                    buf_out += pack_f32(val)
-                elif ffield.type == FIELD_TYPE_S16:
-                    buf_out += pack_u16((val << ffield.shift) & ffield.mask)
-                elif ffield.type == FIELD_TYPE_U8:
-                    buf_out += (val << ffield.shift) & ffield.mask
-                elif ffield.type == FIELD_TYPE_STRING:
+                # Pack long or unsigned long
+                if field.type == JMapFieldType.LONG or field.type == JMapFieldType.UNSIGNED_LONG:
+                    struct.pack_into(">I", buf_out, off_val, (val << field.shift) & field.mask)
+                # Pack float
+                elif field.type == JMapFieldType.FLOAT:
+                    struct.pack_into(">f", buf_out, off_val, val)
+                # Pack short
+                elif field.type == JMapFieldType.SHORT:
+                    struct.pack_into(">H", buf_out, off_val, (val << field.shift) & field.mask)
+                # Pack unsigned char
+                elif field.type == JMapFieldType.UNSIGNED_CHAR:
+                    buf_out[off_val] = (val << field.shift) & field.mask
+                # Pack string
+                elif field.type == JMapFieldType.STRING:
                     if val in string_offsets:
-                        off = string_offsets[val]
+                        off_string = string_offsets[val]
                     else:
-                        off = len(buf_strings)
-                        string_offsets[val] = off
-                        buf_strings += pack_sjis(val)
-                    buf_out += struct.pack(">i", off)
+                        off_string = len(buf_out) - off_strings
+                        string_offsets[val] = off_string
+                        buf_out += helper.pack_sjis(val)
+                    struct.pack_into(">i", buf_out, off_val, off_string)
 
-            buf_out += align4(buf_out)
+            off_entry += len_data_entry
 
-        # Join output and string pool and align it to 32 bytes
-        buf_out += buf_strings
-        buf_out += align32(buf_out, "@")
+        # Align output buffer to 32 bytes
+        buf_out += helper.align32(buf_out, "@")
+
         return buf_out

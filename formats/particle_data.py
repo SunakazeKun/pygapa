@@ -1,5 +1,3 @@
-import os
-
 import formats.bcsv as bcsv
 import formats.jpac210 as jpac210
 from formats import rarc
@@ -296,13 +294,13 @@ class ParticleData:
 
         # Load ParticleNames entries
         print("Load names BCSV ...")
-        particle_names = bcsv.Bcsv()
+        particle_names = bcsv.JMapInfo()
         particle_names.unpack(names_data)
         particle_names = particle_names.entries
 
         # Load AutoEffectList entries
         print("Load effects BCSV ...")
-        auto_effects = bcsv.Bcsv()
+        auto_effects = bcsv.JMapInfo()
         auto_effects.unpack(effects_data)
         self.effects.clear()
 
@@ -376,9 +374,9 @@ class ParticleData:
         particle_container.textures = self.textures
 
         # Pack particles and names
-        particle_names = bcsv.Bcsv()
-        particle_names.new_field("name", bcsv.FIELD_TYPE_STRING)
-        particle_names.new_field("id", bcsv.FIELD_TYPE_S32)
+        particle_names = bcsv.JMapInfo()
+        particle_names.new_field("name", bcsv.JMapFieldType.STRING)
+        particle_names.new_field("id", bcsv.JMapFieldType.LONG)
 
         # Names have to be alphabetically sorted as the game performs binary search
         index = 0
@@ -391,28 +389,28 @@ class ParticleData:
             index += 1
 
         # Pack effects
-        effects_data = bcsv.Bcsv()
-        effects_data.new_field("No", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("GroupName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("AnimName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ContinueAnimEnd", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("UniqueName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("EffectName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ParentName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("JointName", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("OffsetX", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("OffsetY", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("OffsetZ", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("StartFrame", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("EndFrame", bcsv.FIELD_TYPE_S32)
-        effects_data.new_field("Affect", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("Follow", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("ScaleValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("RateValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("PrmColor", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("EnvColor", bcsv.FIELD_TYPE_STRING)
-        effects_data.new_field("LightAffectValue", bcsv.FIELD_TYPE_F32)
-        effects_data.new_field("DrawOrder", bcsv.FIELD_TYPE_STRING)
+        effects_data = bcsv.JMapInfo()
+        effects_data.new_field("No", bcsv.JMapFieldType.LONG)
+        effects_data.new_field("GroupName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("AnimName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("ContinueAnimEnd", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("UniqueName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("EffectName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("ParentName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("JointName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("OffsetX", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("OffsetY", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("OffsetZ", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("StartFrame", bcsv.JMapFieldType.LONG)
+        effects_data.new_field("EndFrame", bcsv.JMapFieldType.LONG)
+        effects_data.new_field("Affect", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("Follow", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("ScaleValue", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("RateValue", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("PrmColor", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("EnvColor", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("LightAffectValue", bcsv.JMapFieldType.FLOAT)
+        effects_data.new_field("DrawOrder", bcsv.JMapFieldType.STRING)
 
         effects_data.entries = [effect.pack() for effect in self.effects]
 

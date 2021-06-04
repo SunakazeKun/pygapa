@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from copy import deepcopy
 from enum import IntEnum
@@ -6,8 +7,7 @@ from enum import IntEnum
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
-from formats import jpac210, rarc, compression
-from formats.helper import *
+from formats import jpac210, rarc, compression, helper
 import formats.particle_data as particle_data
 
 
@@ -165,7 +165,7 @@ class PygapaEditor(QMainWindow):
         # Try to unpack particle data
         try:
             self.effect_arc = rarc.JKRArchive()
-            self.effect_arc.unpack(read_file(self.particle_data_file))
+            self.effect_arc.unpack(helper.read_file(self.particle_data_file))
 
             self.particle_data.unpack_rarc(self.effect_arc.get_root())
         except Exception:  # Will be handled better in the future, smh
@@ -487,7 +487,7 @@ class PygapaEditor(QMainWindow):
             exported_effects.append(self.particle_data.effects[export_index].pack_json())
 
         # Write JSON file
-        write_json_file(export_file, exported_effects)
+        helper.write_json_file(export_file, exported_effects)
 
         self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".", StatusColor.INFO)
 
@@ -501,7 +501,7 @@ class PygapaEditor(QMainWindow):
             return
 
         try:
-            imported_effects = read_json_file(import_file)
+            imported_effects = helper.read_json_file(import_file)
         except Exception:
             self.show_critical(f"An error occured when importing from \"{import_file}\".")
             return
@@ -713,7 +713,7 @@ class PygapaEditor(QMainWindow):
         for particle_index in particle_indexes:
             particle = self.particle_data.particles[particle_index]
             fp_out_particle = os.path.join(export_folder, f"{particle.name}.json")
-            write_json_file(fp_out_particle, particle.pack_json())
+            helper.write_json_file(fp_out_particle, particle.pack_json())
 
         self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".", StatusColor.INFO)
 
@@ -738,12 +738,12 @@ class PygapaEditor(QMainWindow):
         # Go through all particle JSON files
         for import_file in import_files:
             particle = jpac210.JPAResource()
-            particle.name = get_filename(import_file)
+            particle.name = helper.get_filename(import_file)
             is_new_entry = True
 
             # Try to read data from JSON file
             try:
-                particle.unpack_json(read_json_file(import_file))
+                particle.unpack_json(helper.read_json_file(import_file))
             except Exception:
                 # todo: better exception handling?
                 self.show_critical(f"An error occured when importing from \"{import_file}\".")
@@ -812,12 +812,12 @@ class PygapaEditor(QMainWindow):
         # Go through all BTI files
         for import_file in import_files:
             texture = jpac210.JPATexture()
-            texture.file_name = get_filename(import_file)
+            texture.file_name = helper.get_filename(import_file)
             is_new_entry = True
 
             # Try to read data from BTI file
             try:
-                texture.bti_data = read_file(import_file)
+                texture.bti_data = helper.read_file(import_file)
             except Exception:
                 # todo: better exception handling?
                 self.show_critical(f"An error occured when importing from \"{import_file}\".")
@@ -879,7 +879,7 @@ class PygapaEditor(QMainWindow):
 
         for texture_name in texture_names:
             fp_out_texture = os.path.join(export_folder, f"{texture_name}.bti")
-            write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
+            helper.write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
 
         self.status(f"Exported {len(texture_names)} effect(s) to \"{export_folder}\".", StatusColor.INFO)
 

@@ -387,7 +387,7 @@
                 <locale language="English" country="UnitedStates"/>
                </property>
                <property name="text">
-                <string>Animation name</string>
+                <string>Animation names</string>
                </property>
               </widget>
              </item>

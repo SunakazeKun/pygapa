@@ -7,7 +7,7 @@ from enum import IntEnum
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5 import uic, QtGui, QtCore
 
-from formats import jkrcomp, helper, jpac210, particle_data, rarc
+from formats import helper, jkrcomp, jpac210, particle_data, rarc
 
 
 # General application info

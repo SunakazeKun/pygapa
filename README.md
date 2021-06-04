@@ -17,7 +17,6 @@ First of all, this tool is still in development, so a lot of features are not im
 | Particle editing | **High** | As of know, adding completely new particles or editing their aspects is not implemented yet. The creators of *noclip.website* already documented the entirety of the particles engine, which will be a great help when parsing the particle blocks. |
 | 3D renderer | **Medium** | Testing what the particles would look like ingame will make everything a hundred times easier. Writing the renderer for this is the exact opposite, however. I never developed my own program that uses 3D graphics, this will be an interesting initial experience with OpenGL or something similar. |
 | Localization| **Medium** | Most of the SMG modders speak English. The Japanese community, however, rely on translated or localized tools since, so I was told, English is difficult for some of their members. I assume that adding localization should not be difficult. |
-| Preferences | **Low** | Includes an options menu to change settings and preferences. This could be used to specify things such as the compression rate used by WSZST or the currently used language. |
 | SZP/SZS compression | **Low** | As of now, pygapa relies on external tools to encode data using SZS compression. SZP compression is not implemented at all, since it is not used in SMG1/2. However, the SMG games still support decoding SZP data. I never really worked with compression formats on my own so this could be an interesting first take on writing a compression algorithm. |
 
 # Batch mode

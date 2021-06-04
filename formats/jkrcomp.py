@@ -191,7 +191,7 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
     return buf_out
 
 
-def write_file_try_szs_external(file_path: str, buffer, compression_level: str = "10") -> bool:
+def write_file_try_szs_external(file_path: str, buffer, compression_level: str = "ULTRA") -> bool:
     """
     Writes the buffer's contents to the specified file (see ``helper.write_file``). Using third-party tools, this will
     attempt to encode the file using the SZS compression format. If the file was successfully compressed, this function

@@ -4,7 +4,8 @@ import sys
 from copy import deepcopy
 from enum import IntEnum
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
+from PyQt5.QtCore import QSettings
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDialog
 from PyQt5 import uic, QtGui, QtCore
 
 from formats import helper, jkrcomp, jpac210, particle_data, rarc
@@ -12,7 +13,7 @@ from formats import helper, jkrcomp, jpac210, particle_data, rarc
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.6"
+APP_VERSION = "v0.6.1"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -22,8 +23,12 @@ ICON = QtGui.QIcon()
 ICON.addFile("ui/icon.png", QtCore.QSize(32, 32))
 PROGRAM.setWindowIcon(ICON)
 
-# Setup exception hook to catch errors when PyQT crashes
-# thanks to reddit user GoBeWithYou
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Setup exception hook for PyQT
+#
+# Thanks to reddit user GoBeWithYou for this setup
+# ----------------------------------------------------------------------------------------------------------------------
 old_excepthook = sys.excepthook
 
 
@@ -35,6 +40,43 @@ def exception_hook(exctype, value, traceback):
 
 sys.excepthook = exception_hook
 
+# ----------------------------------------------------------------------------------------------------------------------
+# Load and fetch preferences
+# ----------------------------------------------------------------------------------------------------------------------
+__SETTINGS = QSettings("pygapa.ini", QSettings.IniFormat)
+
+
+def get_localization() -> str:
+    return __SETTINGS.value("localization", "en_us", str)
+
+
+def set_localization(val: str):
+    __SETTINGS.setValue("localization", val)
+
+
+def get_last_file() -> str:
+    return __SETTINGS.value("last_file", "", str)
+
+
+def set_last_file(val: str):
+    __SETTINGS.setValue("last_file", val)
+
+
+def is_compress_arc():
+    return __SETTINGS.value("compress_arc", True, bool)
+
+
+def set_compress_arc(val: bool):
+    __SETTINGS.setValue("compress_arc", val)
+
+
+def get_wszst_rate() -> str:
+    return __SETTINGS.value("wszst_rate", "ULTRA", str)
+
+
+def set_wszst_rate(val: str):
+    __SETTINGS.setValue("wszst_rate", val)
+
 
 class StatusColor(IntEnum):
     INFO = 0
@@ -42,13 +84,29 @@ class StatusColor(IntEnum):
     ERROR = 2
 
 
+class PygapaSettingsWindow(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowFlag(QtCore.Qt.MSWindowsFixedSizeDialogHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
+        self.ui = uic.loadUi("ui/preferences.ui", self)
+
+        self.checkCompressArc.stateChanged.connect(lambda state: set_compress_arc(state == 2))
+        self.txtWszstRate.textEdited.connect(set_wszst_rate)
+
+    def show(self):
+        super().show()
+        self.checkCompressArc.setChecked(is_compress_arc())
+        self.txtWszstRate.setText(get_wszst_rate())
+
+
 class PygapaEditor(QMainWindow):
     EDITOR_MODE_EFFECT = 0
     EDITOR_MODE_PARTICLE = 1
     EDITOR_MODE_TEXTURE = 2
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__()
         self.ui = uic.loadUi("ui/main.ui", self)
         self.setWindowTitle(APP_TITLE)
 
@@ -125,10 +183,13 @@ class PygapaEditor(QMainWindow):
         self.actionToolExport.triggered.connect(self.export_textures)
         self.actionToolImport.triggered.connect(self.add_or_import_textures)
 
-        # Finalize UI and show it to user
+        # Create preferences window and menu function
+        self.preferences = PygapaSettingsWindow(self)
+        self.actionPreferences.triggered.connect(self.preferences.show)
+
+        # Finalize UI
         self.actionAbout.triggered.connect(self.show_about)
         self.tabContents.currentChanged.connect(self.update_toolbar)
-
         self.enable_all_components(False)
         self.show()
 
@@ -141,11 +202,11 @@ class PygapaEditor(QMainWindow):
     # ---------------------------------------------------------------------------------------------
     def select_open_particle_data_file(self) -> str:
         filters = "ARC files (*.arc);;RARC files (*.rarc)"
-        return QFileDialog.getOpenFileName(self, "Load particle data from...", filter=filters)[0]
+        return QFileDialog.getOpenFileName(self, "Load particle data from...", directory=get_last_file(), filter=filters)[0]
 
     def select_save_particle_data_file(self) -> str:
         filters = "ARC files (*.arc);;RARC files (*.rarc)"
-        return QFileDialog.getSaveFileName(self, "Save particle data to...", filter=filters)[0]
+        return QFileDialog.getSaveFileName(self, "Save particle data to...", directory=get_last_file(), filter=filters)[0]
 
     def open_particle_data(self):
         particle_file_name = self.select_open_particle_data_file()
@@ -153,6 +214,7 @@ class PygapaEditor(QMainWindow):
         if len(particle_file_name) == 0:
             return
 
+        set_last_file(particle_file_name)
         self.reset_editor()
 
         self.particle_data = particle_data.ParticleData()
@@ -191,22 +253,24 @@ class PygapaEditor(QMainWindow):
             return
 
         if self.particle_data_file is None:
-            particle_folder_name = self.select_save_particle_data_file()
-            if len(particle_folder_name) == 0:
+            particle_file_name = self.select_save_particle_data_file()
+            if len(particle_file_name) == 0:
                 return
 
-            self.particle_data_file = particle_folder_name
+            set_last_file(particle_file_name)
+            self.particle_data_file = particle_file_name
         self.save_particle_data_to_file()
 
     def save_as_particle_data(self):
         if self.particle_data is None or self.contains_errors():
             return
 
-        particle_folder_name = self.select_save_particle_data_file()
-        if len(particle_folder_name) == 0:
+        particle_file_name = self.select_save_particle_data_file()
+        if len(particle_file_name) == 0:
             return
 
-        self.particle_data_file = particle_folder_name
+        set_last_file(particle_file_name)
+        self.particle_data_file = particle_file_name
         self.save_particle_data_to_file()
 
     def save_particle_data_to_file(self):
@@ -214,13 +278,19 @@ class PygapaEditor(QMainWindow):
         self.particle_data.pack_rarc(self.effect_arc.get_root())
 
         # Pack Effect.arc, try to compress the buffer and write to output file.
+        print("Pack RARC archive...")
         packed_arc = self.effect_arc.pack()
-        compressed = jkrcomp.write_file_try_szs_external(self.particle_data_file, packed_arc)
 
-        if compressed:
-            self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
+        if is_compress_arc():
+            compressed = jkrcomp.write_file_try_szs_external(self.particle_data_file, packed_arc, get_wszst_rate())
+
+            if compressed:
+                self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
+            else:
+                self.status(f"Saved particle data to \"{self.particle_data_file}\". Compression failed.", StatusColor.WARN)
         else:
-            self.status(f"Saved particle data to \"{self.particle_data_file}\". Compression failed.", StatusColor.WARN)
+            helper.write_file(self.particle_data_file, packed_arc)
+            self.status(f"Saved particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
 
     def contains_errors(self):
         # todo: improve this, duh

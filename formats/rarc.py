@@ -1,5 +1,5 @@
 import struct
-from enum import IntFlag
+from enum import IntEnum, IntFlag
 
 from formats import jkrcomp, helper
 
@@ -8,9 +8,30 @@ class JKRFileAttr(IntFlag):
     FILE = 1
     DIRECTORY = 2
     COMPRESSED = 4
-    IS_DATA = 16
-    IS_REL = 32
+    LOAD_TO_MRAM = 16
+    LOAD_TO_ARAM = 32
+    LOAD_FROM_DVD = 64
     USE_YAZ0 = 128
+
+
+class JKRResourceType(IntEnum):
+    MRAM = 0
+    ARAM = 1
+    DVD = 2
+    INVALID = 3
+
+    @classmethod
+    def from_attributes(cls, attributes: int):
+        if attributes & JKRFileAttr.LOAD_TO_MRAM:
+            return cls.MRAM
+        elif attributes & JKRFileAttr.LOAD_TO_ARAM:
+            return cls.ARAM
+        elif attributes & JKRFileAttr.LOAD_FROM_DVD:
+            return cls.DVD
+        return cls.INVALID
+
+    def to_attributes(self):
+        return 1 << (self + 4) if self != self.INVALID else 0
 
 
 class JKRDirEntry:
@@ -136,11 +157,12 @@ class JKRDirEntry:
 
 
 class JKRFileEntry:
-    def __init__(self, name: str, data=None, compression: int = jkrcomp.JKRCompressionType.NONE, is_rel: bool = False):
+    def __init__(self, name: str, data=None, res_type: JKRResourceType = JKRResourceType.MRAM,
+                 compression: int = jkrcomp.JKRCompressionType.NONE):
         self.__name = name
         self.__data = data
         self.set_compression(compression)
-        self.is_rel = is_rel
+        self.res_type = res_type
 
     def __str__(self):
         return self.__name
@@ -243,7 +265,7 @@ class JKRArchive:
             off_name += off_strings
 
             # Read the current node's name, create and append a directory entry for the node
-            dir_name = helper.read_ascii(buffer, off_name)
+            dir_name = helper.read_string(buffer, off_name)
             dir_entry = JKRDirEntry(dir_name)
             all_nodes.append(dir_entry)
 
@@ -261,17 +283,17 @@ class JKRArchive:
 
             # Parse all file entries, including sub directories
             for _ in range(num_files):
-                # Usually, file entries consist of a unique identifier, a 16-bit hash, attribute flags, the name offset,
-                # the data offset and data size. However, the identifier and hash are not required when we parse entries
+                # Usually, file entries consist of a unique identifier, a 16-bit hash, attributes, the name offset, the
+                # data offset and data size. However, the identifier and hash are not required when we parse entries
                 # here. Therefore, we do not read those values at all.
-                flags, off_file_data, len_file_data = struct.unpack_from(">3I", buffer, off_file + 0x4)
+                attributes, off_file_data, len_file_data = struct.unpack_from(">3I", buffer, off_file + 0x4)
 
                 # The upper 8 bits are the attribute flags whereas the lower 24 bits are the offset to the file name.
-                off_name = off_strings + (flags & 0x00FFFFFF)
-                flags = (flags >> 24) & 0xFF
+                off_name = off_strings + (attributes & 0x00FFFFFF)
+                attributes = (attributes >> 24) & 0xFF
 
                 # Read file name
-                file_name = helper.read_ascii(buffer, off_name)
+                file_name = helper.read_string(buffer, off_name)
 
                 # Update the next file offset already in case we find one of the two useless directories.
                 off_file += 0x14
@@ -282,13 +304,13 @@ class JKRArchive:
                     continue
 
                 # Directory entry
-                if flags & JKRFileAttr.DIRECTORY:
+                if attributes & JKRFileAttr.DIRECTORY:
                     sub_nodes_for_dir.append(off_file_data)
                 # File entry
-                elif flags & JKRFileAttr.FILE:
+                elif attributes & JKRFileAttr.FILE:
                     # Is file data compressed? If so, determine the compression type (YAZ0 or YAY0)
-                    if flags & JKRFileAttr.COMPRESSED:
-                        if flags & JKRFileAttr.USE_YAZ0:
+                    if attributes & JKRFileAttr.COMPRESSED:
+                        if attributes & JKRFileAttr.USE_YAZ0:
                             compression_type = jkrcomp.JKRCompressionType.SZS
                         else:
                             compression_type = jkrcomp.JKRCompressionType.SZP
@@ -305,15 +327,12 @@ class JKRArchive:
                     elif compression_type == jkrcomp.JKRCompressionType.SZP:
                         buf_file_data = jkrcomp.decompress_szp(buf_file_data, False)
 
-                    # Test if the file is a REL file
-                    is_rel = flags & JKRFileAttr.IS_REL
-
                     # Create and append file entry
-                    file_entry = JKRFileEntry(file_name, buf_file_data, compression_type, is_rel)
+                    file_entry = JKRFileEntry(file_name, buf_file_data, JKRResourceType.from_attributes(attributes), compression_type)
 
                     dir_entry.sub_files.append(file_entry)
                 else:
-                    raise Exception(f"Fatal! Unknown file entry {file_name} with attributes {flags} found.")
+                    raise Exception(f"Fatal! Unknown file entry {file_name} with attributes {attributes} found.")
 
             off_node += 0x10
 
@@ -369,7 +388,7 @@ class JKRArchive:
             else:
                 off = len(out_strings)
                 string_offsets[val] = off
-                out_strings += helper.pack_ascii(val)
+                out_strings += helper.pack_string(val)
             return off
 
         # These two directory names always appear first in the string table
@@ -405,9 +424,9 @@ class JKRArchive:
                 dir_name = str(folder)
                 off_name = find_or_add_string(dir_name)
                 hash_name = self.__file_name_to_hash(dir_name)
-                flags = (1 << (24 + JKRFileAttr.DIRECTORY)) | off_name
+                attributes_and_name = (1 << (24 + JKRFileAttr.DIRECTORY)) | off_name
 
-                out_buf += struct.pack(">2H4I", 0xFFFF, hash_name, flags, folder.temp_id, 0x10, 0x0)
+                out_buf += struct.pack(">2H4I", 0xFFFF, hash_name, attributes_and_name, folder.temp_id, 0x10, 0x0)
 
             # Create file entries
             for file in directory.sub_files:
@@ -415,19 +434,18 @@ class JKRArchive:
                 off_name = find_or_add_string(dir_name)
                 hash_name = self.__file_name_to_hash(dir_name)
 
-                flags = JKRFileAttr.FILE
-                flags |= JKRFileAttr.IS_REL if file.is_rel else JKRFileAttr.IS_DATA
+                attributes_and_name = JKRFileAttr.FILE | file.res_type.to_attributes()
 
                 buf_file_data = file.get_data()
 
-                # todo: Compression of individual files? Although this is not used, the game supports this
+                # Todo: Compression of individual files? Not uses, but SMG1/2 support subfile SZS compression.
 
-                flags_and_name = (flags << 24) | off_name
+                attributes_and_name = (attributes_and_name << 24) | off_name
                 off_file_data = len(out_data)
 
                 out_data += buf_file_data
 
-                out_buf += struct.pack(">2H4I", cur_file_id, hash_name, flags_and_name, off_file_data, len(buf_file_data), 0x0)
+                out_buf += struct.pack(">2H4I", cur_file_id, hash_name, attributes_and_name, off_file_data, len(buf_file_data), 0x0)
                 cur_file_id += 1
 
             node_id = directory.temp_id

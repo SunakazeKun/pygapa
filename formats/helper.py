@@ -124,38 +124,79 @@ def pack_magic8(val: str) -> bytes:
     return __pack_magic(val, 8)
 
 
-# String helper functions
-def __read_string(charset: str, buffer, offset: int = 0) -> str:
+# ----------------------------------------------------------------------------------------------------------------------
+# String reading & packing
+# ----------------------------------------------------------------------------------------------------------------------
+def read_string(buffer, offset: int, charset: str = "ascii") -> str:
+    """
+    Decodes and returns a null-terminated string at the buffer's specified offset. By default, the charset used is
+    assumed to be "ascii".
+
+    :param buffer: buffer containing data
+    :param offset: offset of string
+    :param charset: charset to decode string with, default is "ascii"
+    :returns: the decoded string
+    """
     end = offset
     while end < len(buffer) - 1 and buffer[end] != 0:
         end += 1
     return buffer[offset:end + 1].decode(charset).strip("\0")
 
 
-def __pack_string(charset: str, val: str) -> bytes:
+def pack_string(val: str, charset: str = "ascii") -> bytes:
+    """
+    Encodes a string using the specified charset and returns the bytes.
+
+    :param val: the string to be encoded
+    :param charset: charset to encode string with, default is "ascii"
+    :returns: the encoded string bytes
+    """
     if not val.endswith("\0"):
         val += "\0"
     return val.encode(charset)
 
 
-def read_ascii(buffer, offset: int = 0) -> str:
-    """Decodes and returns the ASCII string at the buffer's specified offset."""
-    return __read_string("ascii", buffer, offset)
+def read_fixed_string(buffer, offset: int, size: int, charset: str = "ascii") -> str:
+    """
+    Decodes and returns a fixed-length string at the buffer's specified offset. By default, the charset used is assumed
+    to be "ascii".
+
+    :param buffer: buffer containing data
+    :param offset: offset of string
+    :param size: size of string in bytes
+    :param charset: charset to decode string with, default is "ascii"
+    :returns: the decoded string
+    """
+    start = offset
+    end = offset + size
+    while offset < end:
+        if buffer[offset] == 0:
+            end = offset
+            break
+        offset += 1
+    return buffer[start:end].decode(charset)
 
 
-def pack_ascii(val: str) -> bytes:
-    """Encodes the string using ASCII and returns the packed bytes. Null-terminates the string if necessary"""
-    return __pack_string("ascii", val)
+def pack_fixed_string(val: str, size: int, charset: str = "ascii"):
+    """
+    Encodes a string using the specified charset and returns the bytes. The size of the returned bytes matches the size
+    parameter. If the size of the encoded bytes is less than the specified size, the bytes are padded to match the
+    expected size. In case the size of the encoded string is larger than the specified size, the encoded bytes are
+    truncated which causes data loss.
 
+    :param val: the string to be encoded
+    :param size: max number of encoded bytes
+    :param charset: charset to encode string with, default is "ascii"
+    :returns: the encoded string bytes
+    """
+    encoded = bytearray(val.encode(charset))
+    enc_size = len(encoded)
 
-def read_sjis(buffer, offset: int) -> str:
-    """Decodes and returns the SJIS string at the buffer's specified offset."""
-    return __read_string("shift_jisx0213", buffer, offset)
-
-
-def pack_sjis(val: str) -> bytes:
-    """Encodes the string using SJIS and returns the packed bytes. Null-terminates the string if necessary"""
-    return __pack_string("shift_jisx0213", val)
+    if enc_size < size:
+        encoded += bytearray(size - enc_size)
+    elif enc_size > size:
+        encoded = encoded[:size]
+    return encoded
 
 
 # ----------------------------------------------------------------------------------------------------------------------

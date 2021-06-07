@@ -12,25 +12,20 @@ class JPATexture:
 
     def unpack(self, buffer, offset: int = 0):
         self.total_size = helper.get_s32(buffer, offset + 0x4)
-        self.file_name = helper.read_sjis(buffer, offset + 0xC)
+        self.file_name = helper.read_fixed_string(buffer, offset + 0xC, 0x14)
         self.bti_data = buffer[offset + 0x20:offset + self.total_size]
 
     def pack(self) -> bytes:
-        out_name = helper.pack_sjis(self.file_name)
-
-        # Calculate and create padding bytes
-        pad_name = 0x14 - len(out_name)
-        if pad_name < 0:
-            raise Exception(f"File name {self.file_name} is too long to pack!")
-        out_pad_name = bytes(pad_name)
+        # Pack name and align BTI data
+        out_name = helper.pack_fixed_string(self.file_name, 0x14)
         out_pad_bti = helper.align32(self.bti_data)
 
         # Calculate total size; 0x20 = header and name size
         self.total_size = 0x20 + len(self.bti_data) + len(out_pad_bti)
 
         # Assemble output
-        out_packed = "TEX1".encode("ascii") + struct.pack(">2i", self.total_size, 0)
-        out_packed += out_name + out_pad_name + self.bti_data + out_pad_bti
+        out_packed = bytearray(struct.pack(">3i", 0x54455831, self.total_size, 0))
+        out_packed += out_name + self.bti_data + out_pad_bti
 
         return out_packed
 

@@ -374,7 +374,7 @@ class ParticleData:
 
         # Pack particles and names
         particle_names = bcsv.JMapInfo()
-        particle_names.new_field("name", bcsv.JMapFieldType.STRING)
+        particle_names.new_field("name", bcsv.JMapFieldType.STRING_OFFSET)
         particle_names.new_field("id", bcsv.JMapFieldType.LONG)
 
         # Names have to be alphabetically sorted as the game performs binary search
@@ -390,26 +390,26 @@ class ParticleData:
         # Pack effects
         effects_data = bcsv.JMapInfo()
         effects_data.new_field("No", bcsv.JMapFieldType.LONG)
-        effects_data.new_field("GroupName", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("AnimName", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("ContinueAnimEnd", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("UniqueName", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("EffectName", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("ParentName", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("JointName", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("GroupName", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("AnimName", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("ContinueAnimEnd", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("UniqueName", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("EffectName", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("ParentName", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("JointName", bcsv.JMapFieldType.STRING_OFFSET)
         effects_data.new_field("OffsetX", bcsv.JMapFieldType.FLOAT)
         effects_data.new_field("OffsetY", bcsv.JMapFieldType.FLOAT)
         effects_data.new_field("OffsetZ", bcsv.JMapFieldType.FLOAT)
         effects_data.new_field("StartFrame", bcsv.JMapFieldType.LONG)
         effects_data.new_field("EndFrame", bcsv.JMapFieldType.LONG)
-        effects_data.new_field("Affect", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("Follow", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("Affect", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("Follow", bcsv.JMapFieldType.STRING_OFFSET)
         effects_data.new_field("ScaleValue", bcsv.JMapFieldType.FLOAT)
         effects_data.new_field("RateValue", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("PrmColor", bcsv.JMapFieldType.STRING)
-        effects_data.new_field("EnvColor", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("PrmColor", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("EnvColor", bcsv.JMapFieldType.STRING_OFFSET)
         effects_data.new_field("LightAffectValue", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("DrawOrder", bcsv.JMapFieldType.STRING)
+        effects_data.new_field("DrawOrder", bcsv.JMapFieldType.STRING_OFFSET)
 
         effects_data.entries = [effect.pack() for effect in self.effects]
 

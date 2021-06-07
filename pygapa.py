@@ -4,25 +4,24 @@ import sys
 from copy import deepcopy
 from enum import IntEnum
 
-from PyQt5.QtCore import QSettings
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDialog
-from PyQt5 import uic, QtGui, QtCore
+from PyQt5.QtCore import QSettings, QSize, Qt
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDialog, QTreeWidgetItem
+from PyQt5 import uic, QtGui
 
 from formats import helper, jkrcomp, jpac210, particle_data, rarc
 
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.6.1"
+APP_VERSION = "v0.6.2"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
 # Setup QT application
 PROGRAM = QApplication([])
 ICON = QtGui.QIcon()
-ICON.addFile("ui/icon.png", QtCore.QSize(32, 32))
+ICON.addFile("ui/icon.png", QSize(32, 32))
 PROGRAM.setWindowIcon(ICON)
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Setup exception hook for PyQT
@@ -84,11 +83,11 @@ class StatusColor(IntEnum):
     ERROR = 2
 
 
-class PygapaSettingsWindow(QDialog):
+class PgpPreferencesWindow(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowFlag(QtCore.Qt.MSWindowsFixedSizeDialogHint, True)
-        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
+        self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.ui = uic.loadUi("ui/preferences.ui", self)
 
         self.checkCompressArc.stateChanged.connect(lambda state: set_compress_arc(state == 2))
@@ -100,11 +99,33 @@ class PygapaSettingsWindow(QDialog):
         self.txtWszstRate.setText(get_wszst_rate())
 
 
-class PygapaEditor(QMainWindow):
-    EDITOR_MODE_EFFECT = 0
-    EDITOR_MODE_PARTICLE = 1
-    EDITOR_MODE_TEXTURE = 2
+class PgpEditorMode(IntEnum):
+    EFFECT = 0
+    PARTICLE = 1
+    TEXTURE = 2
+    DYNAMICS_BLOCK = 3
+    FIELD_BLOCKS = 4
+    FIELD_BLOCK = 5
+    KEY_BLOCKS = 6
+    KEY_BLOCK = 7
+    BASE_SHAPE = 8
+    EXTRA_SHAPE = 9
+    CHILD_SHAPE = 10
+    EX_TEX_SHAPE = 11
 
+
+PBNODE_MODE = 1000
+PBNODE_DATA = 1001
+
+
+def create_data_node(text: str, mode: PgpEditorMode, data):
+    node = QTreeWidgetItem([text])
+    node.setData(0, PBNODE_MODE, mode)
+    node.setData(0, PBNODE_DATA, data)
+    return node
+
+
+class PgpEditor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = uic.loadUi("ui/main.ui", self)
@@ -164,6 +185,7 @@ class PygapaEditor(QMainWindow):
 
         # Register particle editing actions
         self.listParticles.itemSelectionChanged.connect(self.select_particle)
+        self.treeParticleBlocks.itemSelectionChanged.connect(self.select_particle_block)
 
         self.actionToolAdd.triggered.connect(self.add_particle)
         self.actionToolDelete.triggered.connect(self.delete_particles)
@@ -184,7 +206,7 @@ class PygapaEditor(QMainWindow):
         self.actionToolImport.triggered.connect(self.add_or_import_textures)
 
         # Create preferences window and menu function
-        self.preferences = PygapaSettingsWindow(self)
+        self.preferences = PgpPreferencesWindow(self)
         self.actionPreferences.triggered.connect(self.preferences.show)
 
         # Finalize UI
@@ -362,7 +384,11 @@ class PygapaEditor(QMainWindow):
         QMessageBox.critical(self, APP_TITLE, text)
 
     def get_editor_mode(self):
-        return self.tabContents.currentIndex()
+        current_tab = self.tabContents.currentIndex()
+
+        # todo: particle stuff
+
+        return PgpEditorMode(current_tab)
 
     def enable_all_components(self, state: bool):
         self.toolBar.setEnabled(state)
@@ -374,10 +400,11 @@ class PygapaEditor(QMainWindow):
         self.listEffects.clear()
         self.listParticles.clear()
         self.listTextures.clear()
+        self.treeParticleBlocks.clear()
         self.enable_all_components(False)
 
     def update_toolbar(self):
-        if self.get_editor_mode() == self.EDITOR_MODE_TEXTURE:
+        if self.get_editor_mode() == PgpEditorMode.TEXTURE:
             self.actionToolClone.setEnabled(False)
             self.actionToolCopy.setEnabled(False)
             self.actionToolReplace.setEnabled(False)
@@ -438,7 +465,7 @@ class PygapaEditor(QMainWindow):
         self.textEffectEffectName.blockSignals(False)
 
     def add_effect(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
 
         # Create new effect
@@ -454,7 +481,7 @@ class PygapaEditor(QMainWindow):
         self.status("Added new effect entry.", StatusColor.INFO)
 
     def delete_effects(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
             self.status("No effect(s) selected!", StatusColor.ERROR)
@@ -474,7 +501,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Deleted {len(delete_indexes)} effect(s).", StatusColor.INFO)
 
     def clone_effects(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
             self.status("No effect(s) selected!", StatusColor.ERROR)
@@ -502,7 +529,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Cloned {len(clone_indexes)} effect(s).", StatusColor.INFO)
 
     def copy_effect(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
         if self.current_effect is None:
             self.status("No effect selected!", StatusColor.ERROR)
@@ -513,7 +540,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Copied effect {self.copied_effect.description()}.", StatusColor.INFO)
 
     def replace_effect(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
         if self.current_effect is None:
             self.status("No effect selected!", StatusColor.ERROR)
@@ -533,7 +560,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Replaced effect {old_description} with {self.copied_effect.description()}.", StatusColor.INFO)
 
     def export_effects(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
         if len(self.listEffects.selectedItems()) == 0:
             self.status("No effect(s) selected!", StatusColor.ERROR)
@@ -561,7 +588,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".", StatusColor.INFO)
 
     def import_effects(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_EFFECT:
+        if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
 
         import_file = QFileDialog.getOpenFileName(self, "Import from JSON file...", filter="JSON file (*.json)")[0]
@@ -661,6 +688,8 @@ class PygapaEditor(QMainWindow):
     # Particle editing
     # ---------------------------------------------------------------------------------------------
     def select_particle(self):
+        self.treeParticleBlocks.clear()
+
         # Make sure only one effect is selected
         if len(self.listParticles.selectedItems()) != 1:
             self.widgetParticles.setEnabled(False)
@@ -678,17 +707,65 @@ class PygapaEditor(QMainWindow):
         self.textParticleName.setText(self.current_particle.name)
         self.textParticleTextures.setPlainText("\n".join(self.current_particle.texture_names))
 
+        # Populate blocks and their entries
+        self.populate_particle_blocks()
+
         # Release blocked signals
         self.textParticleTextures.blockSignals(False)
 
+    def populate_particle_blocks(self):
+        if self.current_particle.dynamics_block:
+            node = create_data_node("Dynamics", PgpEditorMode.DYNAMICS_BLOCK, self.current_particle.dynamics_block)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+        if self.current_particle.field_blocks is not None:
+            node = create_data_node("Field blocks", PgpEditorMode.FIELD_BLOCKS, self.current_particle.field_blocks)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+            for field_block in self.current_particle.field_blocks:
+                block_node = create_data_node("Field block", PgpEditorMode.FIELD_BLOCK, field_block)
+                node.addChild(block_node)
+
+        if self.current_particle.key_blocks is not None:
+            node = create_data_node("Key blocks", PgpEditorMode.KEY_BLOCKS, self.current_particle.key_blocks)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+            for key_block in self.current_particle.key_blocks:
+                block_node = create_data_node("Key block", PgpEditorMode.KEY_BLOCK, key_block)
+                node.addChild(block_node)
+
+        if self.current_particle.base_shape:
+            node = create_data_node("Base shape", PgpEditorMode.BASE_SHAPE, self.current_particle.base_shape)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+        if self.current_particle.extra_shape:
+            node = create_data_node("Extra shape", PgpEditorMode.EXTRA_SHAPE, self.current_particle.extra_shape)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+        if self.current_particle.child_shape:
+            node = create_data_node("Child shape", PgpEditorMode.CHILD_SHAPE, self.current_particle.child_shape)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+        if self.current_particle.ex_tex_shape:
+            node = create_data_node("Indirect shape", PgpEditorMode.EX_TEX_SHAPE, self.current_particle.ex_tex_shape)
+            self.treeParticleBlocks.addTopLevelItem(node)
+
+    def select_particle_block(self):
+        # Make sure only one block is selected
+        if len(self.treeParticleBlocks.selectedItems()) != 1:
+            return
+
+        current_block_node = self.treeParticleBlocks.currentItem()
+        print(current_block_node.data(0, PBNODE_MODE))
+
     def add_particle(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
 
         self.show_critical("Adding new particles isn't supported yet!")
 
     def delete_particles(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
             self.status("No particle(s) selected!", StatusColor.ERROR)
@@ -708,7 +785,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Deleted {len(delete_indexes)} particle(s).", StatusColor.INFO)
 
     def clone_particles(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
             self.status("No particle(s) selected!", StatusColor.ERROR)
@@ -734,7 +811,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Cloned {len(clone_indexes)} particle(s).", StatusColor.INFO)
 
     def copy_particle(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
         if self.current_particle is None:
             self.status("No particle selected!", StatusColor.ERROR)
@@ -745,7 +822,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Copied particle {self.copied_particle.name}.", StatusColor.INFO)
 
     def replace_particle(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
 
         if self.current_particle is None:
@@ -766,7 +843,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Replaced particle {old_description} with {self.copied_particle.name}.", StatusColor.INFO)
 
     def export_particles(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
         if len(self.listParticles.selectedItems()) == 0:
             self.status("No particle(s) selected!", StatusColor.ERROR)
@@ -787,7 +864,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".", StatusColor.INFO)
 
     def import_particles(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_PARTICLE:
+        if self.get_editor_mode() != PgpEditorMode.PARTICLE:
             return
 
         # Get selected JSON files
@@ -864,7 +941,7 @@ class PygapaEditor(QMainWindow):
         self.current_texture = self.particle_data.textures[self.listTextures.currentItem().text()]
 
     def add_or_import_textures(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+        if self.get_editor_mode() != PgpEditorMode.TEXTURE:
             return
 
         # Get selected JSON files
@@ -914,7 +991,7 @@ class PygapaEditor(QMainWindow):
         self.status(f"Imported {new_texture_count} texture(s), replaced {replaced_entries} existing texture(s).", StatusColor.INFO)
 
     def delete_textures(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+        if self.get_editor_mode() != PgpEditorMode.TEXTURE:
             return
         if len(self.listTextures.selectedItems()) == 0:
             self.status("No texture(s) selected!", StatusColor.ERROR)
@@ -931,10 +1008,10 @@ class PygapaEditor(QMainWindow):
             key = self.listTextures.takeItem(delete_index).text()
             self.particle_data.textures.pop(key)
 
-        self.status(f"Deleted {len(delete_indexes)} particle(s).", StatusColor.INFO)
+        self.status(f"Deleted {len(delete_indexes)} texture(s).", StatusColor.INFO)
 
     def export_textures(self):
-        if self.get_editor_mode() != self.EDITOR_MODE_TEXTURE:
+        if self.get_editor_mode() != PgpEditorMode.TEXTURE:
             return
         if len(self.listTextures.selectedItems()) == 0:
             self.status("No texture(s) selected!", StatusColor.ERROR)
@@ -950,7 +1027,7 @@ class PygapaEditor(QMainWindow):
             fp_out_texture = os.path.join(export_folder, f"{texture_name}.bti")
             helper.write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
 
-        self.status(f"Exported {len(texture_names)} effect(s) to \"{export_folder}\".", StatusColor.INFO)
+        self.status(f"Exported {len(texture_names)} texture(s) to \"{export_folder}\".", StatusColor.INFO)
 
 
 def dump_particle_data(in_folder: str, out_folder: str):
@@ -1040,5 +1117,5 @@ if __name__ == "__main__":
             pack_particle_data(args.in_dir, args.out_dir)
     # Editor mode
     else:
-        main_window = PygapaEditor()
+        main_window = PgpEditor()
         sys.exit(PROGRAM.exec_())

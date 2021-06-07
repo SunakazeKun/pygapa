@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>978</width>
-    <height>875</height>
+    <width>1073</width>
+    <height>879</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -72,7 +72,7 @@
           </property>
           <layout class="QGridLayout" name="gridLayout_6">
            <item row="0" column="0">
-            <layout class="QGridLayout" name="gridEffect" columnstretch="2,0">
+            <layout class="QGridLayout" name="gridEffect" columnstretch="1,2">
              <property name="horizontalSpacing">
               <number>24</number>
              </property>
@@ -650,6 +650,19 @@
                   </property>
                  </widget>
                 </item>
+                <item>
+                 <spacer name="horizontalSpacer_3">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
                </layout>
               </widget>
              </item>
@@ -782,7 +795,7 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>98</width>
+                <width>632</width>
                 <height>398</height>
                </rect>
               </property>
@@ -790,7 +803,7 @@
             </widget>
            </item>
            <item row="0" column="0">
-            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0" columnstretch="2,0">
+            <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0" columnstretch="1,2">
              <property name="horizontalSpacing">
               <number>24</number>
              </property>
@@ -868,9 +881,6 @@
               <widget class="QTreeWidget" name="treeParticleBlocks">
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
-               </property>
-               <property name="rootIsDecorated">
-                <bool>true</bool>
                </property>
                <attribute name="headerVisible">
                 <bool>false</bool>
@@ -959,7 +969,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>978</width>
+     <width>1073</width>
      <height>26</height>
     </rect>
    </property>

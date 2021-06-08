@@ -153,10 +153,10 @@ def read_fixed_string(buffer, offset: int, size: int, charset: str = "ascii") ->
     end = offset + size
     while offset < end:
         if buffer[offset] == 0:
-            end = offset - 1
+            end = offset
             break
         offset += 1
-    return buffer[start:end].decode(charset) if end > start else ""
+    return buffer[start:end].decode(charset)
 
 
 def pack_fixed_string(val: str, size: int, charset: str = "ascii"):

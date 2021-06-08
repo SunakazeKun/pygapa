@@ -4,6 +4,10 @@ from enum import IntEnum
 from formats import helper, mrhash
 
 
+STRUCT_HEADER = struct.Struct(">4I")
+STRUCT_FIELD = struct.Struct(">2IH2B")
+
+
 class JMapFieldType(IntEnum):
     LONG = 0
     STRING = 1  # Not supported in SMG1/2, found in Luigi's Mansion and probably other games using JMapInfo
@@ -88,7 +92,7 @@ class JMapInfo:
         self.entries.clear()
 
         # Read header and calculate offsets
-        num_entries, num_fields, off_data, self.__entry_size = struct.unpack_from(">4i", buffer, offset)
+        num_entries, num_fields, off_data, self.__entry_size = STRUCT_HEADER.unpack_from(buffer, offset)
         off_data += offset
         off_strings = off_data + (num_entries * self.__entry_size)
 
@@ -96,7 +100,7 @@ class JMapInfo:
         for i in range(num_fields):
             off_field = offset + 0x10 + i * 0xC
 
-            field_hash, mask, entry_offset, shift, field_type = struct.unpack_from(">IIHBB", buffer, off_field)
+            field_hash, mask, entry_offset, shift, field_type = STRUCT_FIELD.unpack_from(buffer, off_field)
             field_type = JMapFieldType(field_type)
             field_name = mrhash.find_name(field_hash)
 
@@ -139,7 +143,7 @@ class JMapInfo:
                         val |= ~0xFF
                 # Read string at offset
                 elif f.type == JMapFieldType.STRING_OFFSET:
-                    off_string = off_strings + helper.get_s32(buffer, offset)
+                    off_string = off_strings + helper.get_u32(buffer, offset)
                     val = helper.read_string(buffer, off_string, "shift_jisx0213")
 
                 entry[f.name] = val
@@ -160,7 +164,7 @@ class JMapInfo:
 
         buf_out = bytearray(off_data)
 
-        # Calculate entry length, fix field offsets and pack fields
+        # Recalculate entry size and pack all fields
         if self.__entry_size < 0:
             len_data_entry = 0
             off_field = 0x10
@@ -177,14 +181,21 @@ class JMapInfo:
                 field.offset = len_data_entry  # Fix offset
                 len_data_entry += len(field_type)
 
-                struct.pack_into(">2IH2B", buf_out, off_field, field.hash, field.mask, field.offset, field.shift, field_type)
+                STRUCT_FIELD.pack_into(buf_out, off_field, field.hash, field.mask, field.offset, field.shift, field_type)
                 off_field += 0xC
 
             # Align entry size to 4 bytes
             self.__entry_size = (len_data_entry + 1) & ~3
+        # Don't recalculate entry size and pack fields
+        else:
+            off_field = 0x10
+
+            for field in self.fields.values():
+                STRUCT_FIELD.pack_into(buf_out, off_field, field.hash, field.mask, field.offset, field.shift, field.type)
+                off_field += 0xC
 
         # Pack header
-        struct.pack_into(">4i", buf_out, 0x0, num_entries, num_fields, off_data, self.__entry_size)
+        STRUCT_HEADER.pack_into(buf_out, 0x0, num_entries, num_fields, off_data, self.__entry_size)
 
         # Pack entries
         buf_out += bytearray(self.__entry_size * num_entries)
@@ -201,16 +212,16 @@ class JMapInfo:
 
                 # Pack long or unsigned long
                 if field.type == JMapFieldType.LONG or field.type == JMapFieldType.LONG_2:
-                    struct.pack_into(">I", buf_out, off_val, (val << field.shift) & field.mask)
+                    helper.U32.pack_into(buf_out, off_val, (val << field.shift) & field.mask)
                 # Pack string
                 elif field.type == JMapFieldType.STRING:
                     buf_out[off_val:off_val + 0x20] = helper.pack_fixed_string(val, 0x20, "shift_jisx0213")
                 # Pack float
                 elif field.type == JMapFieldType.FLOAT:
-                    struct.pack_into(">f", buf_out, off_val, val)
+                    helper.F32.pack_into(buf_out, off_val, val)
                 # Pack short
                 elif field.type == JMapFieldType.SHORT:
-                    struct.pack_into(">H", buf_out, off_val, (val << field.shift) & field.mask)
+                    helper.U16.pack_into(buf_out, off_val, (val << field.shift) & field.mask)
                 # Pack char
                 elif field.type == JMapFieldType.CHAR:
                     buf_out[off_val] = (val << field.shift) & field.mask
@@ -222,7 +233,7 @@ class JMapInfo:
                         off_string = len(buf_out) - off_strings
                         string_offsets[val] = off_string
                         buf_out += helper.pack_string(val, "shift_jisx0213")
-                    struct.pack_into(">i", buf_out, off_val, off_string)
+                    helper.U32.pack_into(buf_out, off_val, off_string)
 
             off_entry += self.__entry_size
 

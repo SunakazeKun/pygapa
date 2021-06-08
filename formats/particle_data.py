@@ -426,11 +426,6 @@ class ParticleData:
     def pack_bin(self, jpc_file: str, names_file: str, effects_file: str):
         self.__pack_bin()
 
-        # Create folders if necessary
-        os.makedirs(os.path.dirname(jpc_file), exist_ok=True)
-        os.makedirs(os.path.dirname(names_file), exist_ok=True)
-        os.makedirs(os.path.dirname(effects_file), exist_ok=True)
-
         # Write all the files
         helper.write_file(jpc_file, self.__tmp_packed_particle_container)
         helper.write_file(names_file, self.__tmp_packed_particle_names)
@@ -460,6 +455,7 @@ class ParticleData:
             effects_data_file = rarc.JKRFileEntry("AutoEffectList.bcsv")
             directory.add_file(effects_data_file)
 
+        # Set file data
         particle_container_file.set_data(self.__tmp_packed_particle_container)
         particle_names_file.set_data(self.__tmp_packed_particle_names)
         effects_data_file.set_data(self.__tmp_packed_effects_data)

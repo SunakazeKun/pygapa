@@ -3,125 +3,107 @@ import os
 import struct
 
 
-# unpack_from and pack shortcuts
+# ----------------------------------------------------------------------------------------------------------------------
+# Binary data helpers
+# ----------------------------------------------------------------------------------------------------------------------
+U8 = struct.Struct("B")
+S8 = struct.Struct("b")
+U16 = struct.Struct(">H")
+S16 = struct.Struct(">h")
+U32 = struct.Struct(">I")
+S32 = struct.Struct(">i")
+U64 = struct.Struct(">Q")
+S64 = struct.Struct(">q")
+F32 = struct.Struct(">f")
+F64 = struct.Struct(">d")
+
 
 def get_bool(buffer, offset: int = 0) -> bool:
-    return struct.unpack_from("?", buffer, offset)[0]
+    return buffer[offset] != 0
 
 
-def get_u8(b, o: int) -> int:
-    return b[o]
+def get_u8(buffer, offset: int) -> int:
+    return buffer[offset]
 
 
-def get_s8(b, o: int) -> int:
-    val = b[o]
-    if val & 0x80:
-        val |= ~0xFF
-    return val
+def get_s8(buffer, offset: int) -> int:
+    return S8.unpack_from(buffer, offset)[0]
 
 
-def get_u16(b, o: int) -> int:
-    return struct.unpack_from(">H", b, o)[0]
+def get_u16(buffer, offset: int) -> int:
+    return U16.unpack_from(buffer, offset)[0]
 
 
-def get_s16(b, o: int) -> int:
-    return struct.unpack_from(">h", b, o)[0]
+def get_s16(buffer, offset: int) -> int:
+    return S16.unpack_from(buffer, offset)[0]
 
 
-def get_u32(b, o: int) -> int:
-    return struct.unpack_from(">I", b, o)[0]
+def get_u32(buffer, offset: int) -> int:
+    return U32.unpack_from(buffer, offset)[0]
 
 
-def get_s32(b, o: int) -> int:
-    return struct.unpack_from(">i", b, o)[0]
+def get_s32(buffer, offset: int) -> int:
+    return S32.unpack_from(buffer, offset)[0]
 
 
-def get_u64(b, o: int) -> int:
-    return struct.unpack_from(">Q", b, o)[0]
+def get_u64(buffer, offset: int) -> int:
+    return U64.unpack_from(buffer, offset)[0]
 
 
-def get_s64(b, o: int) -> int:
-    return struct.unpack_from(">q", b, o)[0]
+def get_s64(buffer, offset: int) -> int:
+    return S64.unpack_from(buffer, offset)[0]
 
 
-def get_f32(b, o: int) -> float:
-    return struct.unpack_from(">f", b, o)[0]
+def get_f32(buffer, offset: int) -> int:
+    return F32.unpack_from(buffer, offset)[0]
 
 
-def get_f64(b, o: int) -> float:
-    return struct.unpack_from(">d", b, o)[0]
-
-
-def get_magic4(buffer, offset: int = 0):
-    return buffer[offset:offset+4].decode("ascii")
-
-
-def get_magic8(buffer, offset: int = 0):
-    return buffer[offset:offset+8].decode("ascii")
+def get_f64(buffer, offset: int) -> int:
+    return F64.unpack_from(buffer, offset)[0]
 
 
 def pack_bool(val: bool) -> bytes:
     return pack_u8(1 if val else 0)
 
 
-def pack_u8(v: int) -> bytes:
-    return struct.pack("B", v)
+def pack_u8(val: int) -> bytes:
+    return U8.pack(val)
 
 
-def pack_s8(v: int) -> bytes:
-    return struct.pack("b", v)
+def pack_s8(val: int) -> bytes:
+    return S8.pack(val)
 
 
-def pack_u16(v: int) -> bytes:
-    return struct.pack(">H", v)
+def pack_u16(val: int) -> bytes:
+    return U16.pack(val)
 
 
-def pack_s16(v: int) -> bytes:
-    return struct.pack(">h", v)
+def pack_s16(val: int) -> bytes:
+    return S16.pack(val)
 
 
-def pack_u32(v: int) -> bytes:
-    return struct.pack(">I", v)
+def pack_u32(val: int) -> bytes:
+    return U32.pack(val)
 
 
-def pack_s32(v: int) -> bytes:
-    return struct.pack(">i", v)
+def pack_s32(val: int) -> bytes:
+    return S32.pack(val)
 
 
-def pack_u64(v: int) -> bytes:
-    return struct.pack(">Q", v)
+def pack_u64(val: int) -> bytes:
+    return U64.pack(val)
 
 
-def pack_s64(v: int) -> bytes:
-    return struct.pack(">q", v)
+def pack_s64(val: int) -> bytes:
+    return S64.pack(val)
 
 
-def pack_f32(v: float) -> bytes:
-    return struct.pack(">f", v)
+def pack_f32(val: float) -> bytes:
+    return F32.pack(val)
 
 
-def pack_f64(v: float) -> bytes:
-    return struct.pack(">d", v)
-
-
-def __pack_magic(val: str, size: int) -> bytes:
-    magic = val.encode("ascii")
-    real_size = len(magic)
-
-    if real_size < size:
-        return magic + bytes(size - real_size)
-    elif real_size > size:
-        return magic[:size]
-    else:
-        return magic
-
-
-def pack_magic4(val: str) -> bytes:
-    return __pack_magic(val, 4)
-
-
-def pack_magic8(val: str) -> bytes:
-    return __pack_magic(val, 8)
+def pack_f64(val: float) -> bytes:
+    return F64.pack(val)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -171,10 +153,10 @@ def read_fixed_string(buffer, offset: int, size: int, charset: str = "ascii") ->
     end = offset + size
     while offset < end:
         if buffer[offset] == 0:
-            end = offset
+            end = offset - 1
             break
         offset += 1
-    return buffer[start:end].decode(charset)
+    return buffer[start:end].decode(charset) if end > start else ""
 
 
 def pack_fixed_string(val: str, size: int, charset: str = "ascii"):
@@ -197,6 +179,22 @@ def pack_fixed_string(val: str, size: int, charset: str = "ascii"):
     elif enc_size > size:
         encoded = encoded[:size]
     return encoded
+
+
+def get_magic4(buffer, offset: int = 0):
+    return read_fixed_string(buffer, offset, 4)
+
+
+def get_magic8(buffer, offset: int = 0):
+    return read_fixed_string(buffer, offset, 8)
+
+
+def pack_magic4(val: str) -> bytes:
+    return pack_fixed_string(val, 4)
+
+
+def pack_magic8(val: str) -> bytes:
+    return pack_fixed_string(val, 8)
 
 
 # ----------------------------------------------------------------------------------------------------------------------

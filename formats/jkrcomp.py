@@ -14,34 +14,56 @@ class JKRCompressionType(IntEnum):
     ASR = 3  # Used by Home Menu stuff. Kept here for documentation purposes
 
 
-def decompress(buffer):
+def check_compressed(buffer) -> JKRCompressionType:
     """
-    Decompresses a buffer that is encoded in a JKR compression format and returns the decoded data in a separate buffer.
-    First, this function checks the first three to four magic bytes to determine which compression format to use:
+    This function checks the first three to four magic bytes of the input buffer to determine what algorithm was used
+    to compress the buffer. The supported magic values are:
     - ``Yaz0``: Buffer is encoded using SZS compression
     - ``Yay0``: Buffer is encoded using SZP compression
     - ``ASR``: Buffer is encoded using ASR compression
 
-    ASR decompression is not implemented here since it is kept only for documentation purposes. Therefore, any attempt
-    at decompressing an ASR-encoded buffer will yield a ``NotImplementedError``.
+    This function then returns a JKRCompressionType value that describes the used compression format.
 
-    If the magic bytes do not match any of the above three identifiers, the input buffer is returned since no JKR
-    compression format was found.
-
-    :param buffer: buffer to be decompressed
-    :returns: a buffer containing decompressed data or the input buffer if no compressed data was found.
-    :raises NotImplementedError: raised on any attempt at decoding ASR data
+    :param buffer: buffer to be checked
+    :returns: the JKRCompressionType describing the compression format
     """
     # Magic is "Ya_0"
     if buffer[0] == 0x59 and buffer[1] == 0x61 and buffer[3] == 0x30:
         # Yaz0 -> decompress SZS
         if buffer[2] == 0x7A:
-            return decompress_szs(buffer, False)
+            return JKRCompressionType.SZS
         # Yay0 -> decompress SZP
         elif buffer[2] == 0x79:
-            return decompress_szp(buffer, False)
+            return JKRCompressionType.SZP
     # Magic is "ASR"
     elif buffer[0] == 0x41 and buffer[1] == 0x53 and buffer[2] == 0x52:
+        return JKRCompressionType.ASR
+
+    return JKRCompressionType.NONE
+
+
+def decompress(buffer):
+    """
+    Decompresses a buffer that is encoded in a JKR compression format and returns the decoded data in a separate buffer.
+    First, this function checks the first three to four magic bytes to determine which compression format to use. See
+    ``check_compressed`` for details on that matter.
+
+    ASR decompression is not implemented here since it is kept only for documentation purposes. Therefore, any attempt
+    at decompressing an ASR-encoded buffer will yield a ``NotImplementedError``.
+
+    If no JKR compression identifier was found, the input buffer is returned.
+
+    :param buffer: buffer to be decompressed
+    :returns: a buffer containing decompressed data or the input buffer if no compressed data was found.
+    :raises NotImplementedError: raised on any attempt at decoding ASR data
+    """
+    compression_type = check_compressed(buffer)
+
+    if compression_type == JKRCompressionType.SZS:
+        return decompress_szs(buffer, False)
+    elif compression_type == JKRCompressionType.SZP:
+        return decompress_szp(buffer, False)
+    elif compression_type == JKRCompressionType.ASR:
         raise NotImplementedError("ASR decompression is not supported.")
 
     # Return the input buffer if it does not contain compressed data

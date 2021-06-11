@@ -439,56 +439,6 @@
                <property name="locale">
                 <locale language="English" country="UnitedStates"/>
                </property>
-               <item>
-                <property name="text">
-                 <string>(undefined)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>3D</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>PAUSE_IGNORE</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>INDIRECT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>AFTER_INDIRECT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>BLOOM_EFFECT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>AFTER_IMAGE_EFFECT</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>2D</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>2D_PAUSE_IGNORE</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>FOR_2D_MODEL</string>
-                </property>
-               </item>
               </widget>
              </item>
              <item row="22" column="0">
@@ -795,7 +745,7 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>632</width>
+                <width>98</width>
                 <height>398</height>
                </rect>
               </property>
@@ -970,7 +920,7 @@
      <x>0</x>
      <y>0</y>
      <width>1073</width>
-     <height>26</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

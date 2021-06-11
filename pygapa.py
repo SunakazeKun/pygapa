@@ -13,7 +13,7 @@ from formats import helper, jkrcomp, jpac210, particle_data, rarc
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.6.2"
+APP_VERSION = "v0.6.3"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
@@ -140,6 +140,10 @@ class PgpEditor(QMainWindow):
         self.current_particle = None
         self.copied_particle = None
         self.current_texture = None
+
+        # Populate drawing orders
+        for draw_order in particle_data.DRAW_ORDERS:
+            self.comboEffectDrawOrder.addItem(draw_order)
 
         # File menu actions
         self.actionExit.triggered.connect(lambda: PROGRAM.exit())

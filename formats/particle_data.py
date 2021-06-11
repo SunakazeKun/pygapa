@@ -12,7 +12,8 @@ DRAW_ORDERS = [
     "AFTER_IMAGE_EFFECT",
     "2D",
     "2D_PAUSE_IGNORE",
-    "FOR_2D_MODEL"
+    "FOR_2D_MODEL",
+    "WORLD_MAP_MINI_ICON"
 ]
 
 MATRIX_FLAGS = ["T", "R", "S"]

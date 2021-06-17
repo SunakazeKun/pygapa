@@ -15,9 +15,11 @@ def calc_hash(field_name: str) -> int:
     :returns: the 32-bit MR hash value
     """
     field_hash = 0
-    for ch in field_name:
+    for ch in field_name.encode("shift_jisx0213"):
+        if ch > 0x80:
+            ch |= ~0x7F
         field_hash *= 31
-        field_hash += ord(ch)
+        field_hash += ch
     return field_hash & 0xFFFFFFFF
 
 

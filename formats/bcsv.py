@@ -256,11 +256,7 @@ class JMapInfo:
 
                 # Read long
                 if field_type == JMapFieldType.LONG or field_type == JMapFieldType.LONG_2:
-                    val = (helper.get_u32(buffer, offset) & field.mask) >> field.shift
-
-                    # Make signed int
-                    if val & 0x80000000:
-                        val |= ~0xFFFFFFFF
+                    val = helper.try_sign32((helper.get_u32(buffer, offset) & field.mask) >> field.shift)
                 # Read string
                 elif field_type == JMapFieldType.STRING:
                     val = helper.read_fixed_string(buffer, offset, 0x20, "shift_jisx0213")
@@ -269,18 +265,10 @@ class JMapInfo:
                     val = round(helper.get_f32(buffer, offset), 7)
                 # Read short
                 elif field_type == JMapFieldType.SHORT:
-                    val = (helper.get_u16(buffer, offset) & field.mask) >> field.shift
-
-                    # Make signed short
-                    if val & 0x8000:
-                        val |= ~0xFFFF
+                    val = helper.try_sign16((helper.get_u16(buffer, offset) & field.mask) >> field.shift)
                 # Read char
                 elif field_type == JMapFieldType.CHAR:
-                    val = (buffer[offset] & field.mask) >> field.shift
-
-                    # Make signed char
-                    if val & 0x80:
-                        val |= ~0xFF
+                    val = helper.try_sign8((buffer[offset] & field.mask) >> field.shift)
                 # Read string at offset
                 elif field_type == JMapFieldType.STRING_OFFSET:
                     off_string = off_strings + helper.get_u32(buffer, offset)
@@ -319,7 +307,8 @@ class JMapInfo:
                 field.offset = len_data_entry
                 len_data_entry += len(field_type)
 
-            self.entry_size = len_data_entry
+            # Align total entry size to 4 bytes
+            self.entry_size = (len_data_entry + 3) & ~3
 
         # Prepare output buffer and pack header
         buf_out = bytearray(off_data + num_entries * self.entry_size)

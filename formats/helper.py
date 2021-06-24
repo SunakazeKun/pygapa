@@ -106,6 +106,30 @@ def pack_f64(val: float) -> bytes:
     return F64.pack(val)
 
 
+def try_sign8(val: int) -> int:
+    if val & 0x80:
+        return val | ~0x7F
+    return val
+
+
+def try_sign16(val: int) -> int:
+    if val & 0x8000:
+        return val | ~0x7FFF
+    return val
+
+
+def try_sign32(val: int) -> int:
+    if val & 0x80000000:
+        return val | ~0x7FFFFFFF
+    return val
+
+
+def try_sign64(val: int) -> int:
+    if val & 0x8000000000000000:
+        return val | ~0x7FFFFFFFFFFFFFFF
+    return val
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # String reading & packing
 # ----------------------------------------------------------------------------------------------------------------------

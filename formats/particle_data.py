@@ -98,7 +98,7 @@ class ParticleEffect:
         self.effect_name = get_or_def("EffectName", list())
         self.parent_name = get_or_def("ParentName", "")
         self.joint_name = get_or_def("JointName", "")
-        self.offset_z = get_or_def("OffsetX", 0.0)
+        self.offset_x = get_or_def("OffsetX", 0.0)
         self.offset_y = get_or_def("OffsetY", 0.0)
         self.offset_z = get_or_def("OffsetZ", 0.0)
         self.start_frame = get_or_def("StartFrame", 0)

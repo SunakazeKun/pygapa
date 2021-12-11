@@ -1,17 +1,27 @@
+import enum
 import os
+import platform
+import pyaurum
+import shutil
 import subprocess
-from platform import system
-from enum import IntEnum
-from shutil import which
 
-from formats import helper
+__all__ = [
+    # Classes
+    "JKRCompressionType",
+    # Functions"
+    "check_compressed",
+    "decompress",
+    "decompress_szs",
+    "decompress_szp",
+    "write_file_try_szs_external"
+]
 
 
-class JKRCompressionType(IntEnum):
+class JKRCompressionType(enum.IntEnum):
     NONE = 0  # Use no compression at all
-    SZS = 1  # The compression format used by SMG1/2's ARC files and some others
-    SZP = 2  # Not used in SMG1/2, but decoding this format is still supported by the game
-    ASR = 3  # Used by Home Menu stuff. Kept here for documentation purposes
+    SZS = 1   # The compression format used by SMG1/2's ARC files and some others
+    SZP = 2   # Not used in SMG1/2, but decoding this format is still supported by the game
+    ASR = 3   # Used by Home Menu stuff. Kept here for documentation purposes
 
 
 def check_compressed(buffer) -> JKRCompressionType:
@@ -81,12 +91,12 @@ def decompress_szs(buffer, check: bool = True) -> bytearray:
     :param check: declares whether to check the magic bytes first (True) or force the decompression (False)
     :returns: a bytearray containing the decompressed data or the input buffer if no compressed data was found.
     """
-    if check and helper.get_magic4(buffer) != "Yaz0":
+    if check and pyaurum.get_magic4(buffer) != "Yaz0":
         return buffer
 
     # Get decompressed size and prepare output buffer
-    len_out = helper.get_s32(buffer, 0x4)
-    buf_out = bytearray(len_out)
+    len_out = pyaurum.get_s32(buffer, 0x4)
+    buf_out = pyaurum.ByteBuffer(len_out)
 
     off_in = 16  # Compressed data comes after header
     off_out = 0
@@ -152,12 +162,12 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
     :param check: declares whether to check the magic bytes first (True) or force the decompression (False)
     :returns: a bytearray containing the decompressed data or the input buffer if no compressed data was found.
     """
-    if check and helper.get_magic4(buffer) != "Yay0":
+    if check and pyaurum.get_magic4(buffer) != "Yay0":
         return buffer
 
     # Parse header and prepare output buffer
-    len_out, off_copy_table, off_chunks = helper.struct.unpack_from(">3I", buffer, 0x4)
-    buf_out = bytearray(len_out)
+    len_out, off_copy_table, off_chunks = pyaurum.struct.unpack_from(">3I", buffer, 0x4)
+    buf_out = pyaurum.ByteBuffer(len_out)
 
     off_in = 16  # Compressed data comes after header
     off_out = 0
@@ -171,7 +181,7 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
         # chunk table. Otherwise, we read information from the copy table to determine which decompressed bytes to copy
         # into the output buffer.
         if counter == 0:
-            block = helper.get_u32(buffer, off_in)
+            block = pyaurum.get_u32(buffer, off_in)
             counter = 32
             off_in += 4
 
@@ -215,7 +225,7 @@ def decompress_szp(buffer, check: bool = True) -> bytearray:
 
 def write_file_try_szs_external(file_path: str, buffer, compression_level: str = "ULTRA") -> bool:
     """
-    Writes the buffer's contents to the specified file (see ``helper.write_file``). Using third-party tools, this will
+    Writes the buffer's contents to the specified file (see ``pyaurum.write_file``). Using third-party tools, this will
     attempt to encode the file using the SZS compression format. If the file was successfully compressed, this function
     returns True, otherwise False.
     First, it will attempt to use Wiimm's SZS Tool (WSZST) to compress the file using the specified compression level.
@@ -229,10 +239,10 @@ def write_file_try_szs_external(file_path: str, buffer, compression_level: str =
     :returns: True if compression was successful, False if compression failed
     """
     # Write buffered data to file, then we try to apply external SZS compressors on it
-    helper.write_file(file_path, buffer)
+    pyaurum.write_file(file_path, buffer)
 
     # Try to compress with WSZST if it exists in PATH
-    if which("wszst") is not None:
+    if shutil.which("wszst") is not None:
         try:
             # Run wszst with the specified compression level
             subprocess.run(["wszst", "compress", file_path, "--compr", compression_level])
@@ -242,7 +252,7 @@ def write_file_try_szs_external(file_path: str, buffer, compression_level: str =
             print("Couldn't compress the file using wszst.")
 
     # Try to compress with yaz0enc if WSZST failed and if running on a Windows OS
-    if system() == "Windows" and os.path.exists("yaz0enc.exe"):
+    if platform.system() == "Windows" and os.path.exists("yaz0enc.exe"):
         try:
             # Run yaz0enc on the file
             subprocess.run(["yaz0enc", file_path])

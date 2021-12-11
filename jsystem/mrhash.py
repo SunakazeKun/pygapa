@@ -1,6 +1,12 @@
 import os
+import pyaurum
 
-from formats import helper
+__all__ = [
+    # Functions
+    "calc_hash",
+    "find_name",
+    "add_name"
+]
 
 # MR is Super Mario Galaxy (2)'s namespace. I use this name to refer to the hashes found specifically in those games,
 # because other games using BCSV and JMap, for example Luigi's Mansion, use a different hashing algorithm. MR likely
@@ -21,7 +27,7 @@ def calc_hash(field_name: str) -> int:
     field_hash = 0
     for ch in field_name.encode("shift_jisx0213"):
         field_hash *= 31
-        field_hash += helper.try_sign8(ch)
+        field_hash += pyaurum.try_sign8(ch)
     return field_hash & 0xFFFFFFFF
 
 

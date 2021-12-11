@@ -55,7 +55,7 @@
            <locale language="English" country="UnitedStates"/>
           </property>
           <property name="selectionMode">
-           <enum>QAbstractItemView::ContiguousSelection</enum>
+           <enum>QAbstractItemView::ExtendedSelection</enum>
           </property>
          </widget>
         </item>
@@ -719,7 +719,7 @@
            <locale language="English" country="UnitedStates"/>
           </property>
           <property name="selectionMode">
-           <enum>QAbstractItemView::ContiguousSelection</enum>
+           <enum>QAbstractItemView::ExtendedSelection</enum>
           </property>
          </widget>
         </item>
@@ -745,7 +745,7 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>98</width>
+                <width>645</width>
                 <height>398</height>
                </rect>
               </property>

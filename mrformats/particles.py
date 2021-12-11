@@ -1,27 +1,26 @@
+import jsystem
 import os
+import pyaurum
 
-from formats import bcsv, jpac210, helper, rarc
-
-DRAW_ORDERS = [
-    "(undefined)",
-    "3D",
-    "PAUSE_IGNORE",
-    "INDIRECT",
-    "AFTER_INDIRECT",
-    "BLOOM_EFFECT",
-    "AFTER_IMAGE_EFFECT",
-    "2D",
-    "2D_PAUSE_IGNORE",
-    "FOR_2D_MODEL",
-    "WORLD_MAP_MINI_ICON"
+__all__ = [
+    # Classes
+    "ParticleEffect",
+    "ParticleData",
+    # Functions
+    "fix_draw_order",
+    # Data
+    "PARTICLE_DRAW_ORDERS",
+    "PARTICLE_MATRIX_FLAGS"
 ]
 
-MATRIX_FLAGS = ["T", "R", "S"]
+PARTICLE_DRAW_ORDERS = ["(undefined)", "3D", "PAUSE_IGNORE", "INDIRECT", "AFTER_INDIRECT", "BLOOM_EFFECT",
+                        "AFTER_IMAGE_EFFECT", "2D", "2D_PAUSE_IGNORE", "FOR_2D_MODEL", "WORLD_MAP_MINI_ICON"]
+PARTICLE_MATRIX_FLAGS = ["T", "R", "S"]
 
 
 def fix_draw_order(val: str):
-    if val not in DRAW_ORDERS:
-        return DRAW_ORDERS[0]
+    if val not in PARTICLE_DRAW_ORDERS:
+        return PARTICLE_DRAW_ORDERS[0]
     return val
 
 
@@ -78,7 +77,7 @@ class ParticleEffect:
 
         def get_TRS(key: str, data: dict):
             flags = entry[key].split("/")
-            for flag in MATRIX_FLAGS:
+            for flag in PARTICLE_MATRIX_FLAGS:
                 data[flag] = flag in flags
 
         get_TRS("Affect", self.affect)
@@ -108,12 +107,11 @@ class ParticleEffect:
         self.prm_color = get_or_def("PrmColor", "")
         self.env_color = get_or_def("EnvColor", "")
         self.light_affect_value = get_or_def("LightAffectValue", 0.0)
-        self.draw_order = get_or_def("DrawOrder", "3D")
-        self.draw_order = fix_draw_order(self.draw_order)
+        self.draw_order = fix_draw_order(get_or_def("DrawOrder", "3D"))
 
         def get_TRS(key: str, data: dict):
             flags = entry[key] if key in entry else list()
-            for flag in MATRIX_FLAGS:
+            for flag in PARTICLE_MATRIX_FLAGS:
                 data[flag] = flag in flags
 
         get_TRS("Affect", self.affect)
@@ -143,7 +141,7 @@ class ParticleEffect:
 
         def set_TRS(data: dict, key: str):
             flags = list()
-            for flag in MATRIX_FLAGS:
+            for flag in PARTICLE_MATRIX_FLAGS:
                 if data[flag]:
                     flags.append(flag)
             entry[key] = "/".join(flags)
@@ -185,7 +183,7 @@ class ParticleEffect:
 
         def put_TRS(data: dict, key: str):
             flags = list()
-            for flag in MATRIX_FLAGS:
+            for flag in PARTICLE_MATRIX_FLAGS:
                 if data[flag]:
                     flags.append(flag)
             if len(flags) > 0:
@@ -220,7 +218,7 @@ class ParticleEffect:
         self.draw_order = other.draw_order
 
         def copy_TRS(src: dict, dest: dict):
-            for flag in MATRIX_FLAGS:
+            for flag in PARTICLE_MATRIX_FLAGS:
                 dest[flag] = src[flag]
 
         copy_TRS(other.affect, self.affect)
@@ -243,25 +241,25 @@ class ParticleData:
         self.particles.clear()
         self.effects.clear()
 
-        in_json = helper.read_json_file(json_file)
-        in_effects_json = helper.read_json_file(effects_json_file)
+        in_json = pyaurum.read_json_file(json_file)
+        in_effects_json = pyaurum.read_json_file(effects_json_file)
 
         unused_texture_names = list()
 
         print("Loading texture files...")
         for texture_name in in_json["textures"]:
-            texture = jpac210.JPATexture()
+            texture = jsystem.JPATexture()
             texture.file_name = texture_name
-            texture.bti_data = helper.read_bin_file(os.path.join(bti_folder, f"{texture_name}.bti"))
+            texture.bti_data = pyaurum.read_bin_file(os.path.join(bti_folder, f"{texture_name}.bti"))
 
             self.textures[texture_name] = texture
             unused_texture_names.append(texture_name)
 
         print("Loading particle files...")
         for particle_name in in_json["particles"]:
-            particle = jpac210.JPAResource()
+            particle = jsystem.JPAResource()
             particle.name = particle_name
-            in_particle_json = helper.read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
+            in_particle_json = pyaurum.read_json_file(os.path.join(particles_folder, f"{particle_name}.json"))
             particle.unpack_json(in_particle_json)
 
             for texture_name in particle.texture_names:
@@ -287,20 +285,20 @@ class ParticleData:
     def __unpack_bin_files(self, jpc_data, names_data, effects_data):
         # Load JPAResource and JPATexture entries
         print("Load JPC file ...")
-        particle_container = jpac210.JParticlesContainer()
+        particle_container = jsystem.JParticlesContainer()
         particle_container.unpack(jpc_data)
         self.textures = particle_container.textures
         self.particles.clear()
 
         # Load ParticleNames entries
         print("Load names BCSV ...")
-        particle_names = bcsv.JMapInfo()
+        particle_names = jsystem.JMapInfo()
         particle_names.unpack(names_data)
         particle_names = particle_names.entries
 
         # Load AutoEffectList entries
         print("Load effects BCSV ...")
-        auto_effects = bcsv.JMapInfo()
+        auto_effects = jsystem.JMapInfo()
         auto_effects.unpack(effects_data)
         self.effects.clear()
 
@@ -322,15 +320,15 @@ class ParticleData:
             self.particles.append(particle)
 
     def unpack_bin(self, jpc_file: str, names_file: str, effects_file: str):
-        jpc_data = helper.read_bin_file(jpc_file)
-        names_data = helper.read_bin_file(names_file)
-        effects_data = helper.read_bin_file(effects_file)
+        jpc_data = pyaurum.read_bin_file(jpc_file)
+        names_data = pyaurum.read_bin_file(names_file)
+        effects_data = pyaurum.read_bin_file(effects_file)
         self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
-    def unpack_rarc(self, directory: rarc.JKRDirEntry):
-        jpc_data = directory.find_file("Particles.jpc").get_data()
-        names_data = directory.find_file("ParticleNames.bcsv").get_data()
-        effects_data = directory.find_file("AutoEffectList.bcsv").get_data()
+    def unpack_rarc(self, archive: jsystem.JKRArchive):
+        jpc_data = archive.find_file("/Particles.jpc").data
+        names_data = archive.find_file("/ParticleNames.bcsv").data
+        effects_data = archive.find_file("/AutoEffectList.bcsv").data
         self.__unpack_bin_files(jpc_data, names_data, effects_data)
 
     def pack_json(self, json_file: str, particles_folder: str, bti_folder: str, effects_json_file: str):
@@ -350,33 +348,33 @@ class ParticleData:
         print("Dump particles ...")
         for jpa in self.particles:
             out_json["particles"].append(jpa.name)
-            helper.write_json_file(os.path.join(particles_folder, f"{jpa.name}.json"), jpa.pack_json())
+            pyaurum.write_json_file(os.path.join(particles_folder, f"{jpa.name}.json"), jpa.pack_json())
 
         # Collect texture names and write texture BTIs
         print("Dump textures ...")
         for jpatex_name, jpatex in self.textures.items():
             out_json["textures"].append(jpatex_name)
 
-            helper.write_file(os.path.join(bti_folder, f"{jpatex_name}.bti"), jpatex.bti_data)
+            pyaurum.write_file(os.path.join(bti_folder, f"{jpatex_name}.bti"), jpatex.bti_data)
 
         # Write lists of particles and textures
-        helper.write_json_file(json_file, out_json)
+        pyaurum.write_json_file(json_file, out_json)
 
         # Pack AutoEffectList entries
         print("Dump effects ...")
         out_effects_json = [effect.pack_json() for effect in self.effects]
 
         # Write AutoEffectList entries
-        helper.write_json_file(effects_json_file, out_effects_json)
+        pyaurum.write_json_file(effects_json_file, out_effects_json)
 
     def __pack_bin(self):
-        particle_container = jpac210.JParticlesContainer()
+        particle_container = jsystem.JParticlesContainer()
         particle_container.textures = self.textures
 
         # Pack particles and names
-        particle_names = bcsv.JMapInfo()
-        particle_names.new_field("name", bcsv.JMapFieldType.STRING_OFFSET)
-        particle_names.new_field("id", bcsv.JMapFieldType.LONG)
+        particle_names = jsystem.JMapInfo()
+        particle_names.new_field("name", jsystem.JMapFieldType.STRING_OFFSET)
+        particle_names.new_field("id", jsystem.JMapFieldType.LONG)
 
         # Names have to be alphabetically sorted as the game performs binary search
         index = 0
@@ -389,30 +387,34 @@ class ParticleData:
             index += 1
 
         # Pack effects
-        effects_data = bcsv.JMapInfo()
-        effects_data.new_field("No", bcsv.JMapFieldType.LONG)
-        effects_data.new_field("GroupName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("AnimName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("ContinueAnimEnd", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("UniqueName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("EffectName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("ParentName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("JointName", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("OffsetX", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("OffsetY", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("OffsetZ", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("StartFrame", bcsv.JMapFieldType.LONG)
-        effects_data.new_field("EndFrame", bcsv.JMapFieldType.LONG)
-        effects_data.new_field("Affect", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("Follow", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("ScaleValue", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("RateValue", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("PrmColor", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("EnvColor", bcsv.JMapFieldType.STRING_OFFSET)
-        effects_data.new_field("LightAffectValue", bcsv.JMapFieldType.FLOAT)
-        effects_data.new_field("DrawOrder", bcsv.JMapFieldType.STRING_OFFSET)
+        effects_data = jsystem.JMapInfo()
+        effects_data.new_field("No", jsystem.JMapFieldType.LONG)
+        effects_data.new_field("GroupName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("AnimName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("ContinueAnimEnd", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("UniqueName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("EffectName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("ParentName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("JointName", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("OffsetX", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("OffsetY", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("OffsetZ", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("StartFrame", jsystem.JMapFieldType.LONG)
+        effects_data.new_field("EndFrame", jsystem.JMapFieldType.LONG)
+        effects_data.new_field("Affect", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("Follow", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("ScaleValue", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("RateValue", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("PrmColor", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("EnvColor", jsystem.JMapFieldType.STRING_OFFSET)
+        effects_data.new_field("LightAffectValue", jsystem.JMapFieldType.FLOAT)
+        effects_data.new_field("DrawOrder", jsystem.JMapFieldType.STRING_OFFSET)
 
-        effects_data.entries = [effect.pack() for effect in self.effects]
+        effects_data.entries.clear()
+
+        for i, effect in enumerate(self.effects):
+            effect.index = i
+            effects_data.entries.append(effect.pack())
 
         # Pack all data
         print("Pack JPC data...")
@@ -428,41 +430,37 @@ class ParticleData:
         self.__pack_bin()
 
         # Write all the files
-        helper.write_file(jpc_file, self.__tmp_packed_particle_container)
-        helper.write_file(names_file, self.__tmp_packed_particle_names)
-        helper.write_file(effects_file, self.__tmp_packed_effects_data)
+        pyaurum.write_file(jpc_file, self.__tmp_packed_particle_container)
+        pyaurum.write_file(names_file, self.__tmp_packed_particle_names)
+        pyaurum.write_file(effects_file, self.__tmp_packed_effects_data)
 
         # Release buffered data
         del self.__tmp_packed_particle_container
         del self.__tmp_packed_particle_names
         del self.__tmp_packed_effects_data
 
-    def pack_rarc(self, directory: rarc.JKRDirEntry):
+    def pack_rarc(self, archive: jsystem.JKRArchive):
         self.__pack_bin()
 
         # Get files from RARC folder if existent
-        particle_container_file = directory.find_file("Particles.jpc")
-        particle_names_file = directory.find_file("ParticleNames.bcsv")
-        effects_data_file = directory.find_file("AutoEffectList.bcsv")
+        particle_container_file = archive.find_file("/Particles.jpc")
+        particle_names_file = archive.find_file("/ParticleNames.bcsv")
+        effects_data_file = archive.find_file("/AutoEffectList.bcsv")
 
         # Try to create non-existent files if necessary
         if particle_container_file is None:
-            particle_container_file = rarc.JKRFileEntry("Particles.jpc")
-            directory.add_file(particle_container_file)
+            particle_container_file = archive.create_file(archive.get_root(), "/Particles.jpc")
         if particle_names_file is None:
-            particle_names_file = rarc.JKRFileEntry("ParticleNames.bcsv")
-            directory.add_file(particle_names_file)
+            particle_names_file = archive.create_file(archive.get_root(), "/ParticleNames.bcsv")
         if effects_data_file is None:
-            effects_data_file = rarc.JKRFileEntry("AutoEffectList.bcsv")
-            directory.add_file(effects_data_file)
+            effects_data_file = archive.create_file(archive.get_root(), "/AutoEffectList.bcsv")
 
         # Set file data
-        particle_container_file.set_data(self.__tmp_packed_particle_container)
-        particle_names_file.set_data(self.__tmp_packed_particle_names)
-        effects_data_file.set_data(self.__tmp_packed_effects_data)
+        particle_container_file.data = self.__tmp_packed_particle_container
+        particle_names_file.data = self.__tmp_packed_particle_names
+        effects_data_file.data = self.__tmp_packed_effects_data
 
         # Release buffered data
         del self.__tmp_packed_particle_container
         del self.__tmp_packed_particle_names
         del self.__tmp_packed_effects_data
-

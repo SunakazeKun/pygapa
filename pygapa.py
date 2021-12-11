@@ -1,33 +1,27 @@
 import argparse
+import copy
+import enum
+import jsystem
+import mrformats
 import os
+import pyaurum
 import sys
-from copy import deepcopy
-from enum import IntEnum
 
-from PyQt5.QtCore import QSettings, QSize, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox, QDialog, QTreeWidgetItem
-from PyQt5 import uic, QtGui
-
-from formats import helper, jkrcomp, jpac210, particle_data, rarc
-
+from PyQt5 import uic, QtGui, QtCore, QtWidgets
 
 # General application info
 APP_NAME = "pygapa"
-APP_VERSION = "v0.6.3"
+APP_VERSION = "v0.7"
 APP_CREATOR = "Aurum"
 APP_TITLE = f"{APP_NAME} {APP_VERSION} -- by {APP_CREATOR}"
 
 # Setup QT application
-PROGRAM = QApplication([])
+PROGRAM = QtWidgets.QApplication([])
 ICON = QtGui.QIcon()
-ICON.addFile("ui/icon.png", QSize(32, 32))
+ICON.addFile("ui/icon.png", QtCore.QSize(32, 32))
 PROGRAM.setWindowIcon(ICON)
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Setup exception hook for PyQT
-#
-# Thanks to reddit user GoBeWithYou for this setup
-# ----------------------------------------------------------------------------------------------------------------------
+# Setup exception hook
 old_excepthook = sys.excepthook
 
 
@@ -42,7 +36,7 @@ sys.excepthook = exception_hook
 # ----------------------------------------------------------------------------------------------------------------------
 # Load and fetch preferences
 # ----------------------------------------------------------------------------------------------------------------------
-__SETTINGS = QSettings("pygapa.ini", QSettings.IniFormat)
+__SETTINGS = QtCore.QSettings("pygapa.ini", QtCore.QSettings.IniFormat)
 
 
 def get_localization() -> str:
@@ -77,17 +71,17 @@ def set_wszst_rate(val: str):
     __SETTINGS.setValue("wszst_rate", val)
 
 
-class StatusColor(IntEnum):
+class StatusColor(enum.IntEnum):
     INFO = 0
     WARN = 1
     ERROR = 2
 
 
-class PgpPreferencesWindow(QDialog):
+class PgpPreferencesWindow(QtWidgets.QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowFlag(Qt.MSWindowsFixedSizeDialogHint, True)
-        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setWindowFlag(QtCore.Qt.MSWindowsFixedSizeDialogHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
         self.ui = uic.loadUi("ui/preferences.ui", self)
 
         self.checkCompressArc.stateChanged.connect(lambda state: set_compress_arc(state == 2))
@@ -99,7 +93,7 @@ class PgpPreferencesWindow(QDialog):
         self.txtWszstRate.setText(get_wszst_rate())
 
 
-class PgpEditorMode(IntEnum):
+class PgpEditorMode(enum.IntEnum):
     EFFECT = 0
     PARTICLE = 1
     TEXTURE = 2
@@ -119,13 +113,13 @@ PBNODE_DATA = 1001
 
 
 def create_data_node(text: str, mode: PgpEditorMode, data):
-    node = QTreeWidgetItem([text])
+    node = QtWidgets.QTreeWidgetItem([text])
     node.setData(0, PBNODE_MODE, mode)
     node.setData(0, PBNODE_DATA, data)
     return node
 
 
-class PgpEditor(QMainWindow):
+class PgpEditor(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = uic.loadUi("ui/main.ui", self)
@@ -142,7 +136,7 @@ class PgpEditor(QMainWindow):
         self.current_texture = None
 
         # Populate drawing orders
-        for draw_order in particle_data.DRAW_ORDERS:
+        for draw_order in mrformats.PARTICLE_DRAW_ORDERS:
             self.comboEffectDrawOrder.addItem(draw_order)
 
         # File menu actions
@@ -228,11 +222,11 @@ class PgpEditor(QMainWindow):
     # ---------------------------------------------------------------------------------------------
     def select_open_particle_data_file(self) -> str:
         filters = "ARC files (*.arc);;RARC files (*.rarc)"
-        return QFileDialog.getOpenFileName(self, "Load particle data from...", directory=get_last_file(), filter=filters)[0]
+        return QtWidgets.QFileDialog.getOpenFileName(self, "Load particle data from...", directory=get_last_file(), filter=filters)[0]
 
     def select_save_particle_data_file(self) -> str:
         filters = "ARC files (*.arc);;RARC files (*.rarc)"
-        return QFileDialog.getSaveFileName(self, "Save particle data to...", directory=get_last_file(), filter=filters)[0]
+        return QtWidgets.QFileDialog.getSaveFileName(self, "Save particle data to...", directory=get_last_file(), filter=filters)[0]
 
     def open_particle_data(self):
         particle_file_name = self.select_open_particle_data_file()
@@ -243,7 +237,7 @@ class PgpEditor(QMainWindow):
         set_last_file(particle_file_name)
         self.reset_editor()
 
-        self.particle_data = particle_data.ParticleData()
+        self.particle_data = mrformats.ParticleData()
         self.particle_data_file = particle_file_name
         self.current_effect = None
         self.current_particle = None
@@ -251,10 +245,10 @@ class PgpEditor(QMainWindow):
 
         # Try to unpack particle data
         try:
-            self.effect_arc = rarc.JKRArchive()
-            self.effect_arc.unpack(helper.read_bin_file(self.particle_data_file))
+            self.effect_arc = jsystem.JKRArchive()
+            self.effect_arc.unpack(pyaurum.read_bin_file(self.particle_data_file))
 
-            self.particle_data.unpack_rarc(self.effect_arc.get_root())
+            self.particle_data.unpack_rarc(self.effect_arc)
         except Exception:  # Will be handled better in the future, smh
             self.status("An error occured while loading particle data.", StatusColor.ERROR)
             return
@@ -301,21 +295,21 @@ class PgpEditor(QMainWindow):
 
     def save_particle_data_to_file(self):
         # Pack particle data into RARC folder
-        self.particle_data.pack_rarc(self.effect_arc.get_root())
+        self.particle_data.pack_rarc(self.effect_arc)
 
         # Pack Effect.arc, try to compress the buffer and write to output file.
         print("Pack RARC archive...")
         packed_arc = self.effect_arc.pack()
 
         if is_compress_arc():
-            compressed = jkrcomp.write_file_try_szs_external(self.particle_data_file, packed_arc, get_wszst_rate())
+            compressed = jsystem.write_file_try_szs_external(self.particle_data_file, packed_arc, get_wszst_rate())
 
             if compressed:
                 self.status(f"Saved and compressed particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
             else:
                 self.status(f"Saved particle data to \"{self.particle_data_file}\". Compression failed.", StatusColor.WARN)
         else:
-            helper.write_file(self.particle_data_file, packed_arc)
+            pyaurum.write_file(self.particle_data_file, packed_arc)
             self.status(f"Saved particle data to \"{self.particle_data_file}\".", StatusColor.INFO)
 
     def contains_errors(self):
@@ -379,13 +373,13 @@ class PgpEditor(QMainWindow):
         self.statusBar.showMessage(text, duration)
 
     def show_information(self, text: str):
-        QMessageBox.information(self, APP_TITLE, text)
+        QtWidgets.QMessageBox.information(self, APP_TITLE, text)
 
     def show_warning(self, text: str):
-        QMessageBox.warning(self, APP_TITLE, text)
+        QtWidgets.QMessageBox.warning(self, APP_TITLE, text)
 
     def show_critical(self, text: str):
-        QMessageBox.critical(self, APP_TITLE, text)
+        QtWidgets.QMessageBox.critical(self, APP_TITLE, text)
 
     def get_editor_mode(self):
         current_tab = self.tabContents.currentIndex()
@@ -462,7 +456,7 @@ class PgpEditor(QMainWindow):
         self.spinnerEffectLightAffectValue.setValue(self.current_effect.light_affect_value)
         self.textEffectPrmColor.setText(self.current_effect.prm_color)
         self.textEffectEnvColor.setText(self.current_effect.env_color)
-        self.comboEffectDrawOrder.setCurrentIndex(particle_data.DRAW_ORDERS.index(self.current_effect.draw_order))
+        self.comboEffectDrawOrder.setCurrentIndex(mrformats.PARTICLE_DRAW_ORDERS.index(self.current_effect.draw_order))
 
         # Release blocked signals
         self.textEffectAnimName.blockSignals(False)
@@ -473,7 +467,7 @@ class PgpEditor(QMainWindow):
             return
 
         # Create new effect
-        effect = particle_data.ParticleEffect()
+        effect = mrformats.ParticleEffect()
         self.particle_data.effects.append(effect)
 
         # Update effects list
@@ -522,7 +516,7 @@ class PgpEditor(QMainWindow):
 
         # Create deep clones of all effects and populate them to the respective lists
         for clone_index in clone_indexes:
-            clone = deepcopy(self.particle_data.effects[clone_index])
+            clone = copy.deepcopy(self.particle_data.effects[clone_index])
             self.particle_data.effects.append(clone)
             self.listEffects.addItem(clone.description())
 
@@ -539,7 +533,7 @@ class PgpEditor(QMainWindow):
             self.status("No effect selected!", StatusColor.ERROR)
             return
 
-        self.copied_effect = deepcopy(self.particle_data.effects[self.listEffects.currentRow()])
+        self.copied_effect = copy.deepcopy(self.particle_data.effects[self.listEffects.currentRow()])
 
         self.status(f"Copied effect {self.copied_effect.description()}.", StatusColor.INFO)
 
@@ -571,7 +565,7 @@ class PgpEditor(QMainWindow):
             return
 
         # Get file to export data to
-        export_file = QFileDialog.getSaveFileName(self, "Export to JSON file...", filter="JSON file (*.json)")[0]
+        export_file = QtWidgets.QFileDialog.getSaveFileName(self, "Export to JSON file...", filter="JSON file (*.json)")[0]
 
         if len(export_file) == 0:
             return
@@ -587,7 +581,7 @@ class PgpEditor(QMainWindow):
             exported_effects.append(self.particle_data.effects[export_index].pack_json())
 
         # Write JSON file
-        helper.write_json_file(export_file, exported_effects)
+        pyaurum.write_json_file(export_file, exported_effects)
 
         self.status(f"Exported {len(export_indexes)} effect(s) to \"{export_file}\".", StatusColor.INFO)
 
@@ -595,13 +589,13 @@ class PgpEditor(QMainWindow):
         if self.get_editor_mode() != PgpEditorMode.EFFECT:
             return
 
-        import_file = QFileDialog.getOpenFileName(self, "Import from JSON file...", filter="JSON file (*.json)")[0]
+        import_file = QtWidgets.QFileDialog.getOpenFileName(self, "Import from JSON file...", filter="JSON file (*.json)")[0]
 
         if len(import_file) == 0:
             return
 
         try:
-            imported_effects = helper.read_json_file(import_file)
+            imported_effects = pyaurum.read_json_file(import_file)
         except Exception:
             self.show_critical(f"An error occured when importing from \"{import_file}\".")
             return
@@ -611,7 +605,7 @@ class PgpEditor(QMainWindow):
 
         # Convert JSON entries to effects and add them to the respective lists
         for effect_entry in imported_effects:
-            effect = particle_data.ParticleEffect()
+            effect = mrformats.ParticleEffect()
             effect.unpack_json(effect_entry)
 
             self.particle_data.effects.append(effect)
@@ -686,7 +680,7 @@ class PgpEditor(QMainWindow):
         self.current_effect.env_color = text
 
     def set_effect_draw_order(self, index: int):
-        self.current_effect.draw_order = particle_data.DRAW_ORDERS[index]
+        self.current_effect.draw_order = mrformats.PARTICLE_DRAW_ORDERS[index]
 
     # ---------------------------------------------------------------------------------------------
     # Particle editing
@@ -804,7 +798,7 @@ class PgpEditor(QMainWindow):
 
         # Create deep clones of all effects and populate them to the respective lists
         for clone_index in clone_indexes:
-            clone = deepcopy(self.particle_data.particles[clone_index])
+            clone = copy.deepcopy(self.particle_data.particles[clone_index])
             self.particle_data.particles.append(clone)
             self.listParticles.addItem(clone.name)
 
@@ -821,7 +815,7 @@ class PgpEditor(QMainWindow):
             self.status("No particle selected!", StatusColor.ERROR)
             return
 
-        self.copied_particle = deepcopy(self.particle_data.particles[self.listParticles.currentRow()])
+        self.copied_particle = copy.deepcopy(self.particle_data.particles[self.listParticles.currentRow()])
 
         self.status(f"Copied particle {self.copied_particle.name}.", StatusColor.INFO)
 
@@ -853,7 +847,7 @@ class PgpEditor(QMainWindow):
             self.status("No particle(s) selected!", StatusColor.ERROR)
             return
 
-        export_folder = QFileDialog.getExistingDirectory(self, "Export particles to...")
+        export_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Export particles to...")
         if len(export_folder) == 0:
             return
 
@@ -863,7 +857,7 @@ class PgpEditor(QMainWindow):
         for particle_index in particle_indexes:
             particle = self.particle_data.particles[particle_index]
             fp_out_particle = os.path.join(export_folder, f"{particle.name}.json")
-            helper.write_json_file(fp_out_particle, particle.pack_json())
+            pyaurum.write_json_file(fp_out_particle, particle.pack_json())
 
         self.status(f"Exported {len(particle_indexes)} particle(s) to \"{export_folder}\".", StatusColor.INFO)
 
@@ -872,7 +866,7 @@ class PgpEditor(QMainWindow):
             return
 
         # Get selected JSON files
-        import_files = QFileDialog.getOpenFileNames(self, "Import from JSON files...", filter="JSON file (*.json)")[0]
+        import_files = QtWidgets.QFileDialog.getOpenFileNames(self, "Import from JSON files...", filter="JSON file (*.json)")[0]
         new_particle_count = len(import_files)
 
         if new_particle_count == 0:
@@ -887,13 +881,13 @@ class PgpEditor(QMainWindow):
 
         # Go through all particle JSON files
         for import_file in import_files:
-            particle = jpac210.JPAResource()
-            particle.name = helper.get_filename(import_file)
+            particle = jsystem.JPAResource()
+            particle.name = pyaurum.get_filename(import_file)
             is_new_entry = True
 
             # Try to read data from JSON file
             try:
-                particle.unpack_json(helper.read_json_file(import_file))
+                particle.unpack_json(pyaurum.read_json_file(import_file))
             except Exception:
                 # todo: better exception handling?
                 self.show_critical(f"An error occured when importing from \"{import_file}\".")
@@ -949,7 +943,7 @@ class PgpEditor(QMainWindow):
             return
 
         # Get selected JSON files
-        import_files = QFileDialog.getOpenFileNames(self, "Import BTI files...", filter="BTI file (*.bti)")[0]
+        import_files = QtWidgets.QFileDialog.getOpenFileNames(self, "Import BTI files...", filter="BTI file (*.bti)")[0]
         new_texture_count = len(import_files)
 
         if new_texture_count == 0:
@@ -961,13 +955,13 @@ class PgpEditor(QMainWindow):
 
         # Go through all BTI files
         for import_file in import_files:
-            texture = jpac210.JPATexture()
-            texture.file_name = helper.get_filename(import_file)
+            texture = jsystem.JPATexture()
+            texture.file_name = pyaurum.get_filename(import_file)
             is_new_entry = True
 
             # Try to read data from BTI file
             try:
-                texture.bti_data = helper.read_bin_file(import_file)
+                texture.bti_data = pyaurum.read_bin_file(import_file)
             except Exception:
                 # todo: better exception handling?
                 self.show_critical(f"An error occured when importing from \"{import_file}\".")
@@ -1021,7 +1015,7 @@ class PgpEditor(QMainWindow):
             self.status("No texture(s) selected!", StatusColor.ERROR)
             return
 
-        export_folder = QFileDialog.getExistingDirectory(self, "Export textures to...")
+        export_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Export textures to...")
         if len(export_folder) == 0:
             return
 
@@ -1029,7 +1023,7 @@ class PgpEditor(QMainWindow):
 
         for texture_name in texture_names:
             fp_out_texture = os.path.join(export_folder, f"{texture_name}.bti")
-            helper.write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
+            pyaurum.write_file(fp_out_texture, self.particle_data.textures[texture_name].bti_data)
 
         self.status(f"Exported {len(texture_names)} texture(s) to \"{export_folder}\".", StatusColor.INFO)
 
@@ -1065,7 +1059,7 @@ def dump_particle_data(in_folder: str, out_folder: str):
     fp_out_effects_json = os.path.join(out_folder, "Effects.json")
 
     # Unpack data from JPC and BCSV files
-    pd = particle_data.ParticleData()
+    pd = mrformats.ParticleData()
     pd.unpack_bin(fp_particles, fp_particle_names, fp_effects)
 
     # Dump data to JSON and BTI files
@@ -1099,7 +1093,7 @@ def pack_particle_data(in_folder: str, out_folder: str):
     fp_out_effects = os.path.join(out_folder, "AutoEffectList.bcsv")
 
     # Load data from JSON and BTI files
-    pd = particle_data.ParticleData()
+    pd = mrformats.ParticleData()
     pd.unpack_json(fp_particles_json, fp_particles, fp_textures, fp_effects_json)
 
     # Pack data to JPC and BCSV files
